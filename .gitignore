@@ -1,0 +1,14 @@
+# Build / package output
+/dist/**
+!/dist/.gitkeep
+
+# Local env (prod host/path, secrets)
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
