@@ -36,6 +36,8 @@ build:
 
 [windows]
 build:
+    #!powershell.exe
+    $ErrorActionPreference = "Stop"
     if (Test-Path "{{ stage_dir }}") { Remove-Item -Recurse -Force "{{ stage_dir }}" }
     New-Item -ItemType Directory -Path "{{ stage_dir }}" -Force | Out-Null
     $skip = @('.git', 'dist', '.env', '.cursor')
@@ -56,6 +58,8 @@ package: build
 
 [windows]
 package: build
+    #!powershell.exe
+    $ErrorActionPreference = "Stop"
     if (Test-Path "{{ artifact }}") { Remove-Item -Force "{{ artifact }}" }
     Compress-Archive -Path (Join-Path "{{ stage_dir }}" '*') -DestinationPath "{{ artifact }}"
     Write-Host "wrote {{ artifact }}"
@@ -78,6 +82,8 @@ ship host=prod_host path=prod_path user=prod_user: package
 
 [windows]
 ship host=prod_host path=prod_path user=prod_user: package
+    #!powershell.exe
+    $ErrorActionPreference = "Stop"
     if (-not "{{ host }}" -or -not "{{ path }}") {
       Write-Error "set TNG_PROD_HOST and TNG_PROD_PATH (or pass host= path=)"
       exit 1
@@ -100,6 +106,8 @@ clean:
 
 [windows]
 clean:
+    #!powershell.exe
+    $ErrorActionPreference = "Stop"
     if (Test-Path "{{ dist_dir }}") { Remove-Item -Recurse -Force "{{ dist_dir }}" }
     New-Item -ItemType Directory -Path "{{ dist_dir }}" -Force | Out-Null
     New-Item -ItemType File -Path (Join-Path "{{ dist_dir }}" ".gitkeep") -Force | Out-Null
