@@ -4,6 +4,35 @@ Go IRC platform. Gateway owns the sockets. Everything else consumes events.
 
 Predecessors: [t3b](https://github.com/iamtew/t3b), [subotto](https://github.com/iamtew/subotto).
 
+## MISSION
+
+Build a resilient IRC platform using Go.
+
+The system must separate IRC connectivity from bot logic.
+
+The IRC Gateway is the sole component that maintains a
+connection to IRC servers.
+
+All IRC activity is translated into structured events and
+published onto an event bus.
+
+Consumers such as bots, dashboards, analytics, logging,
+and AI modules subscribe to events and may be restarted
+independently without impacting the IRC connection.
+
+## DESIGN PRINCIPLES
+
+1. Gateway owns the IRC connection.
+2. Business logic never touches IRC sockets.
+3. Everything is an event.
+4. Components communicate over IPC.
+5. Components must be independently deployable.
+6. SQLite is acceptable for local persistence.
+7. Prefer standard library where practical.
+8. Design for multi-server support from day one.
+9. Graceful reconnection is mandatory.
+10. The gateway must operate unattended for months.
+
 ## Rules
 
 1. Only the gateway talks IRC.
