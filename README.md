@@ -17,7 +17,7 @@ Also needed:
 ## Recipes
 
 ```text
-just build     # stage working tree → dist/stage
+just build     # stage working tree + linux amd64 binary → dist/stage
 just package   # zip → dist/tng.zip (runs build)
 just ship      # scp zip to prod (runs package)
 just clean     # wipe dist/
@@ -39,11 +39,20 @@ Env vars, a gitignored `.env` in the repo root, or:
 just ship host=prod.example.com path=/opt/tng user=deploy
 ```
 
-On the Linux box: unzip `tng.zip` into the deploy path and run from there (app entrypoints land later).
+On the Linux box: unzip `tng.zip` into the deploy path, copy `config.example.toml` to `config.toml`, edit, then `./tng`.
+
+## Run locally
+
+```text
+copy config.example.toml config.toml   # then edit
+go run ./cmd/tng -config config.toml
+```
+
+Ctrl+C sends QUIT and exits. Gateway reconnects until then.
 
 ## Notes
 
 - Packaging copies the **working tree** (excludes `.git`, `dist/`, `.env`, `.cursor`). Uncommitted local files are included.
 - Justfile uses `[unix]` (bash) and `[windows]` (PowerShell) recipe variants; same recipe names on both.
 - Linux stages with `tar`, zips with `zip`. Windows copies with PowerShell, zips with `Compress-Archive`.
-- When Go binaries exist, extend `build` to compile into `dist/stage` before packaging.
+- `just build` copies the working tree, then `GOOS=linux GOARCH=amd64 go build` into `dist/stage/tng` (prod is Linux). Local Windows runs use `go run ./cmd/tng`.

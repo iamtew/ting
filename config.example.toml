@@ -1,0 +1,25 @@
+# Copy to config.toml (gitignored) and edit before connecting.
+# tng -config config.toml
+
+channels = ["#tng"]
+
+# After 001, if set: PRIVMSG NickServ :IDENTIFY <password>
+nickserv_password = ""
+
+[server]
+host = "irc.example.net"
+port = 6697
+tls = true
+# Lab/self-signed only. Never on a real network.
+tls_skip_verify = false
+
+[identity]
+nick = "tng"
+user = "tng"
+realname = "tng"
+
+[sasl]
+enabled = false
+mechanism = "PLAIN"
+user = ""
+password = ""

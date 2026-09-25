@@ -33,6 +33,8 @@ build:
       --exclude='./.cursor' \
       . | tar -xf - -C "{{ stage_dir }}"
     echo "staged -> {{ stage_dir }}"
+    GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/tng" ./cmd/tng
+    echo "linux amd64 binary -> {{ stage_dir }}/tng"
 
 [windows]
 build:
@@ -45,6 +47,10 @@ build:
       Copy-Item -Recurse -Force $_.FullName -Destination (Join-Path "{{ stage_dir }}" $_.Name)
     }
     Write-Host "staged -> {{ stage_dir }}"
+    $env:GOOS = "linux"
+    $env:GOARCH = "amd64"
+    go build -o (Join-Path "{{ stage_dir }}" "tng") ./cmd/tng
+    Write-Host "linux amd64 binary -> {{ stage_dir }}/tng"
 
 # ── package: zip dist/stage → dist/tng.zip ─────────────────────────────
 
