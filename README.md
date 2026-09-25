@@ -9,7 +9,10 @@ Develop on Windows 10, package a zip locally, ship to Linux prod. No commit/push
 - **Windows:** `winget install Casey.Just` / `scoop install just` / `cargo install just`
 - **Linux:** see [just install](https://github.com/casey/just#installation) (`cargo install just`, packages, or the install script)
 
-Also needed: **Python 3** (stage/zip), and **OpenSSH `scp`** for `ship` (Windows: Optional Features → OpenSSH Client).
+Also needed:
+
+- **Linux:** `zip`, `tar`, OpenSSH `scp`
+- **Windows:** PowerShell 5+ (built-in), OpenSSH Client optional feature (`scp`)
 
 ## Recipes
 
@@ -40,6 +43,7 @@ On the Linux box: unzip `tng.zip` into the deploy path and run from there (app e
 
 ## Notes
 
-- Packaging copies the **working tree** (excludes `.git`, `dist/`, `.env`, caches). Uncommitted local files are included.
-- Windows and Linux share the same recipes; packaging uses Python’s zip, not shell-specific tools.
-- When Go binaries exist, extend the `build` recipe to compile into `dist/stage` before packaging.
+- Packaging copies the **working tree** (excludes `.git`, `dist/`, `.env`, `.cursor`). Uncommitted local files are included.
+- Justfile uses `[unix]` (bash) and `[windows]` (PowerShell) recipe variants; same recipe names on both.
+- Linux stages with `tar`, zips with `zip`. Windows copies with PowerShell, zips with `Compress-Archive`.
+- When Go binaries exist, extend `build` to compile into `dist/stage` before packaging.
