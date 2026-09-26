@@ -137,6 +137,28 @@ run:
       }
     }
 
+# ── stop: leftover go run / binaries from `just run` ───────────────────
+
+[unix]
+stop:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pkill -f 'go run ./cmd/tng-connector' 2>/dev/null || true
+    pkill -f 'go run ./cmd/tng-master' 2>/dev/null || true
+    pkill -x tng-connector 2>/dev/null || true
+    pkill -x tng-master 2>/dev/null || true
+
+[windows]
+stop:
+    #!powershell.exe
+    $ErrorActionPreference = "SilentlyContinue"
+    Get-CimInstance Win32_Process | Where-Object {
+      $_.Name -match 'tng-connector|tng-master' -or
+      $_.CommandLine -match 'cmd/tng-connector|cmd/tng-master'
+    } | ForEach-Object {
+      Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
 # ── clean ──────────────────────────────────────────────────────────────
 
 [unix]

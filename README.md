@@ -18,6 +18,7 @@ Also needed:
 
 ```text
 just run       # gateway + master (needs config.toml)
+just stop      # kill leftover connector/master from `just run`
 just build     # stage working tree + linux amd64 binaries → dist/stage
 just package   # zip → dist/tng.zip (runs build)
 just ship      # scp zip to prod (runs package)
