@@ -73,3 +73,60 @@ func TestSessionJoin(t *testing.T) {
 		t.Fatal("timeout")
 	}
 }
+
+func TestSessionErrorReconnect(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	addr := ln.Addr().(*net.TCPAddr)
+
+	n := make(chan int, 2)
+	go func() {
+		for i := 1; ; i++ {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			n <- i
+			go func(c net.Conn, i int) {
+				defer c.Close()
+				br := bufio.NewReader(c)
+				for {
+					_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+					line, err := br.ReadString('\n')
+					if err != nil {
+						return
+					}
+					if strings.HasPrefix(line, "NICK ") {
+						io.WriteString(c, ":irc 001 tng :welcome\r\n")
+						if i == 1 {
+							io.WriteString(c, "ERROR :goodbye\r\n")
+						}
+					}
+				}
+			}(c, i)
+		}
+	}()
+
+	g := New(Spec{
+		Server:   config.Server{Host: "127.0.0.1", Port: addr.Port, TLS: false},
+		Identity: config.Identity{Nick: "tng", User: "tng", Realname: "tng"},
+	}, log.New(io.Discard, "", 0))
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	go g.Run(ctx)
+
+	if (<-n) != 1 {
+		t.Fatal("first accept")
+	}
+	select {
+	case got := <-n:
+		if got != 2 {
+			t.Fatalf("reconnect got %d", got)
+		}
+	case <-ctx.Done():
+		t.Fatal("no reconnect after ERROR")
+	}
+}

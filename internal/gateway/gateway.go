@@ -127,9 +127,13 @@ func (g *Gateway) Run(ctx context.Context) error {
 	backoff := time.Second
 	for {
 		err := g.session(ctx)
+		up := g.Connected()
 		g.setConnected(false)
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if up {
+			backoff = time.Second
 		}
 		g.emit(Event{Kind: "disconnected"})
 		g.log.Printf("disconnected: %v — retry in %s", err, backoff)
@@ -152,32 +156,49 @@ func (g *Gateway) session(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
-	go func() {
-		<-ctx.Done()
-		g.Send("QUIT :tng")
-		time.Sleep(200 * time.Millisecond)
-		conn.Close()
-	}()
-
+	drainOut(g.out)
 	g.resetMaps()
 	sess, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go g.writeLoop(sess, conn)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		g.writeLoop(sess, conn)
+	}()
+	go func() {
+		select {
+		case <-ctx.Done():
+			g.Send("QUIT :tng")
+			time.Sleep(200 * time.Millisecond)
+		case <-sess.Done():
+		}
+		conn.Close()
+	}()
+	defer func() {
+		cancel()
+		conn.Close()
+		<-done
+	}()
 
 	if err := g.register(); err != nil {
 		return err
 	}
 
 	br := bufio.NewReaderSize(conn, 8192)
+	idlePing := false
 	for {
 		if err := conn.SetReadDeadline(time.Now().Add(readIdle)); err != nil {
 			return err
 		}
 		line, err := br.ReadString('\n')
 		if err != nil {
+			if isTimeout(err) && !idlePing {
+				idlePing = true
+				g.Send("PING :tng")
+				continue
+			}
 			return err
 		}
+		idlePing = false
 		msg := Parse(line)
 		if msg.Command == "" {
 			continue
@@ -195,6 +216,10 @@ func (g *Gateway) dial(ctx context.Context) (net.Conn, error) {
 	raw, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
+	}
+	if tc, ok := raw.(*net.TCPConn); ok {
+		_ = tc.SetKeepAlive(true)
+		_ = tc.SetKeepAlivePeriod(30 * time.Second)
 	}
 	if !g.cfg.Server.TLS {
 		return raw, nil
@@ -227,6 +252,8 @@ func (g *Gateway) handle(msg Message) error {
 	switch msg.Command {
 	case "PING":
 		g.Send("PONG :" + msg.Last())
+	case "ERROR":
+		return fmt.Errorf("irc: %s", msg.Last())
 	case "CAP":
 		g.handleCAP(msg)
 	case "AUTHENTICATE":
@@ -401,9 +428,28 @@ func (g *Gateway) writeLoop(ctx context.Context, conn net.Conn) {
 			if _, err := io.WriteString(conn, line); err != nil {
 				return
 			}
-			time.Sleep(floodDelay)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(floodDelay):
+			}
 		}
 	}
+}
+
+func drainOut(ch <-chan string) {
+	for {
+		select {
+		case <-ch:
+		default:
+			return
+		}
+	}
+}
+
+func isTimeout(err error) bool {
+	ne, ok := err.(net.Error)
+	return ok && ne.Timeout()
 }
 
 func saslPlain(user, pass string) string {
