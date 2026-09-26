@@ -2,27 +2,33 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tng</title>
-<style>
-body { font: 14px sans-serif; margin: 1rem; max-width: 52rem; }
-form { margin: .5rem 0; display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
-input[type=text], input[type=password] { min-width: 10rem; }
-pre { background: #111; color: #ddd; padding: .6rem; height: 16rem; overflow: auto; }
-#chs { white-space: pre-wrap; }
-</style>
+<link rel="stylesheet" href="/static/css/fontawesome.min.css">
+<link rel="stylesheet" href="/static/css/solid.min.css">
+<link rel="stylesheet" href="/static/css/regular.min.css">
+<link rel="stylesheet" href="/static/css/brands.min.css">
+<link rel="stylesheet" href="/static/css/admin.css">
 </head>
 <body>
-<h1>tng</h1>
+<header>
+  <img class="mark" src="/static/img/dummy.png" alt="">
+  <h1>tng</h1>
+</header>
+<div class="grid">
+<div class="ops">
 <p id="st">…</p>
 <div id="chs"></div>
-<form id="join"><input name="channel" placeholder="#channel"><button>join</button></form>
-<form id="part"><input name="channel" placeholder="#channel"><button>part</button></form>
-<form id="say"><input name="target" placeholder="target"><input name="text" placeholder="text"><button>say</button></form>
-<form id="nick"><input name="nick" placeholder="nick"><button>nick</button></form>
-<form id="raw"><input name="line" placeholder="raw IRC"><button>raw</button></form>
-<form id="quit"><button>quit (reconnect)</button></form>
-<form id="shutdown"><button>shutdown gateway</button></form>
+<form id="join"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-plus"></i> join</button></form>
+<form id="part"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-minus"></i> part</button></form>
+<form id="say"><input name="target" placeholder="target"><input name="text" placeholder="text"><button><i class="fa-solid fa-comment"></i> say</button></form>
+<form id="nick"><input name="nick" placeholder="nick"><button><i class="fa-solid fa-id-card"></i> nick</button></form>
+<form id="raw"><input name="line" placeholder="raw IRC"><button><i class="fa-solid fa-terminal"></i> raw</button></form>
+<form id="quit"><button><i class="fa-solid fa-plug"></i> quit (reconnect)</button></form>
+<form id="shutdown"><button class="danger"><i class="fa-solid fa-power-off"></i> shutdown gateway</button></form>
+</div>
 <pre id="log"></pre>
+</div>
 <script>
 async function api(path, body) {
   const opt = {method: body === undefined ? 'GET' : 'POST'};
@@ -39,7 +45,9 @@ async function refresh() {
   const r = await api('/api/status');
   if (!r || !r.ok) return;
   const s = await r.json();
-  document.getElementById('st').textContent = (s.connected ? 'up' : 'down') + ' ' + s.nick + ' ' + s.server;
+  const st = document.getElementById('st');
+  st.textContent = (s.connected ? 'up' : 'down') + ' ' + s.nick + ' ' + s.server;
+  st.className = s.connected ? 'up' : '';
   let t = '';
   for (const ch of Object.keys(s.channels || {}).sort()) {
     t += ch + ' ' + (s.channels[ch] || []).join(' ') + '\n';

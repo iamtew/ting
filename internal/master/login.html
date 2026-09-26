@@ -1,10 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><title>tng login</title></head>
-<body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tng login</title>
+<link rel="stylesheet" href="/static/css/fontawesome.min.css">
+<link rel="stylesheet" href="/static/css/solid.min.css">
+<link rel="stylesheet" href="/static/css/regular.min.css">
+<link rel="stylesheet" href="/static/css/brands.min.css">
+<link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body class="login">
+<header>
+  <img class="mark" src="/static/img/dummy.png" alt="">
+  <h1>tng</h1>
+</header>
 <form method="post" action="/login">
 <label>token <input type="password" name="token" required></label>
-<button>enter</button>
+<button><i class="fa-solid fa-right-to-bracket"></i> enter</button>
 </form>
 </body>
 </html>

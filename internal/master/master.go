@@ -45,6 +45,7 @@ func New(cfg config.Config, stop func(), logger *log.Logger) *Master {
 
 func (m *Master) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("GET /static/", staticHandler())
 	mux.HandleFunc("GET /login", m.loginGET)
 	mux.HandleFunc("POST /login", m.loginPOST)
 	mux.HandleFunc("GET /", m.auth(m.index))
