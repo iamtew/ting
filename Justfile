@@ -115,10 +115,9 @@ run:
       echo "error: copy config.example.toml to config.toml" >&2
       exit 1
     fi
-    go run ./cmd/tng-connector -config config.toml &
-    gw=$!
-    trap 'kill $gw 2>/dev/null || true' EXIT INT TERM
-    go run ./cmd/tng-master -config config.toml
+    mkdir -p dist/dev
+    go build -o dist/dev/tng-connector ./cmd/tng-connector
+    go run ./cmd/tng-master -config config.toml -connector dist/dev/tng-connector
 
 [windows]
 run:
@@ -128,14 +127,9 @@ run:
       Write-Error "copy config.example.toml to config.toml"
       exit 1
     }
-    $gw = Start-Process -FilePath "go" -ArgumentList @("run","./cmd/tng-connector","-config","config.toml") -NoNewWindow -PassThru
-    try {
-      go run ./cmd/tng-master -config config.toml
-    } finally {
-      if ($gw -and -not $gw.HasExited) {
-        Stop-Process -Id $gw.Id -Force -ErrorAction SilentlyContinue
-      }
-    }
+    New-Item -ItemType Directory -Path "dist/dev" -Force | Out-Null
+    go build -o (Join-Path "dist/dev" "tng-connector.exe") ./cmd/tng-connector
+    go run ./cmd/tng-master -config config.toml -connector (Join-Path "dist/dev" "tng-connector.exe")
 
 # ── stop: leftover go run / binaries from `just run` ───────────────────
 

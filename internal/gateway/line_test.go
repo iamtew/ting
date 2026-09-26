@@ -6,8 +6,8 @@ import (
 	"github.com/iamtew/tng/internal/config"
 )
 
-func testCfg() config.Config {
-	return config.Config{
+func testCfg() Spec {
+	return Spec{
 		Identity: config.Identity{Nick: "tng", User: "tng", Realname: "tng"},
 		Server:   config.Server{Host: "127.0.0.1", Port: 1},
 	}

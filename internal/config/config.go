@@ -10,42 +10,47 @@ import (
 )
 
 const DefaultPath = "config.toml"
+const DefaultDatabase = "tng.db"
 
 type Config struct {
+	Database  string `toml:"database"`
+	Connector string `toml:"connector"`
+
+	// Legacy: imported into SQLite once if the DB is empty.
 	Channels         []string `toml:"channels"`
 	NickServPassword string   `toml:"nickserv_password"`
 	Owners           []string `toml:"owners"`
 	Admins           []string `toml:"admins"`
 	Server           Server   `toml:"server"`
-	Identity         Identity `toml:"identity"`
 	SASL             SASL     `toml:"sasl"`
-	Control          Control  `toml:"control"`
-	Admin            Admin    `toml:"admin"`
+
+	Identity Identity `toml:"identity"`
+	Control  Control  `toml:"control"`
+	Admin    Admin    `toml:"admin"`
 }
 
 type Server struct {
-	Host          string `toml:"host"`
-	Port          int    `toml:"port"`
-	TLS           bool   `toml:"tls"`
-	TLSSkipVerify bool   `toml:"tls_skip_verify"`
+	Host          string `toml:"host" json:"host"`
+	Port          int    `toml:"port" json:"port"`
+	TLS           bool   `toml:"tls" json:"tls"`
+	TLSSkipVerify bool   `toml:"tls_skip_verify" json:"tls_skip_verify"`
 }
 
 type Identity struct {
-	Nick     string `toml:"nick"`
-	User     string `toml:"user"`
-	Realname string `toml:"realname"`
+	Nick     string `toml:"nick" json:"nick"`
+	User     string `toml:"user" json:"user"`
+	Realname string `toml:"realname" json:"realname"`
 }
 
 type SASL struct {
-	Enabled   bool   `toml:"enabled"`
-	Mechanism string `toml:"mechanism"`
-	User      string `toml:"user"`
-	Password  string `toml:"password"`
+	Enabled   bool   `toml:"enabled" json:"enabled"`
+	Mechanism string `toml:"mechanism" json:"mechanism"`
+	User      string `toml:"user" json:"user"`
+	Password  string `toml:"password" json:"password"`
 }
 
 type Control struct {
-	Listen string `toml:"listen"`
-	Token  string `toml:"token"`
+	Token string `toml:"token"`
 }
 
 type Admin struct {
@@ -74,7 +79,7 @@ func (c *Config) applyDefaults() {
 	if c.Identity.Realname == "" {
 		c.Identity.Realname = c.Identity.Nick
 	}
-	if c.Server.Port == 0 {
+	if c.Server.Port == 0 && c.Server.Host != "" {
 		if c.Server.TLS {
 			c.Server.Port = 6697
 		} else {
@@ -84,47 +89,22 @@ func (c *Config) applyDefaults() {
 	if strings.TrimSpace(c.SASL.Mechanism) == "" {
 		c.SASL.Mechanism = "PLAIN"
 	}
-	if strings.TrimSpace(c.Control.Listen) == "" {
-		c.Control.Listen = "127.0.0.1:7391"
-	}
 	if strings.TrimSpace(c.Admin.Listen) == "" {
 		c.Admin.Listen = "127.0.0.1:8080"
+	}
+	if strings.TrimSpace(c.Database) == "" {
+		c.Database = DefaultDatabase
 	}
 }
 
 func (c Config) Validate() error {
-	if strings.TrimSpace(c.Server.Host) == "" {
-		return fmt.Errorf("server.host is required")
-	}
-	if c.Server.Port < 1 || c.Server.Port > 65535 {
-		return fmt.Errorf("server.port out of range")
-	}
 	if strings.TrimSpace(c.Identity.Nick) == "" {
 		return fmt.Errorf("identity.nick is required")
 	}
 	if strings.TrimSpace(c.Control.Token) == "" {
 		return fmt.Errorf("control.token is required")
 	}
-	if err := loopbackListen("control.listen", c.Control.Listen); err != nil {
-		return err
-	}
-	if err := loopbackListen("admin.listen", c.Admin.Listen); err != nil {
-		return err
-	}
-	if !c.SASL.Enabled {
-		return nil
-	}
-	mech := strings.ToUpper(strings.TrimSpace(c.SASL.Mechanism))
-	if mech != "PLAIN" {
-		return fmt.Errorf("sasl.mechanism %q not supported (PLAIN only)", c.SASL.Mechanism)
-	}
-	if strings.TrimSpace(c.SASL.User) == "" || c.SASL.Password == "" {
-		return fmt.Errorf("sasl.enabled requires sasl.user and sasl.password")
-	}
-	if !c.Server.TLS {
-		return fmt.Errorf("sasl PLAIN requires server.tls = true")
-	}
-	return nil
+	return loopbackListen("admin.listen", c.Admin.Listen)
 }
 
 func loopbackListen(field, addr string) error {
@@ -142,6 +122,6 @@ func loopbackListen(field, addr string) error {
 	return nil
 }
 
-func (c Config) Addr() string {
-	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
+func (s Server) Addr() string {
+	return fmt.Sprintf("%s:%d", s.Host, s.Port)
 }

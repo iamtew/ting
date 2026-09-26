@@ -16,6 +16,16 @@ import (
 	"github.com/iamtew/tng/internal/config"
 )
 
+type Spec struct {
+	Server           config.Server   `json:"server"`
+	Identity         config.Identity `json:"identity"`
+	SASL             config.SASL     `json:"sasl"`
+	NickServPassword string          `json:"nickserv_password"`
+	Channels         []string        `json:"channels"`
+}
+
+func (s Spec) Addr() string { return s.Server.Addr() }
+
 const (
 	readIdle   = 3 * time.Minute
 	floodDelay = 350 * time.Millisecond // ponytail: global pace; per-target tokens if a net complains
@@ -32,7 +42,7 @@ type Event struct {
 }
 
 type Gateway struct {
-	cfg    config.Config
+	cfg    Spec
 	log    *log.Logger
 	events chan Event
 	out    chan string
@@ -43,7 +53,7 @@ type Gateway struct {
 	chans     map[string]map[string]struct{} // folded channel -> nick set
 }
 
-func New(cfg config.Config, logger *log.Logger) *Gateway {
+func New(cfg Spec, logger *log.Logger) *Gateway {
 	if logger == nil {
 		logger = log.Default()
 	}

@@ -1,37 +1,18 @@
 # Copy to config.toml (gitignored) and edit before connecting.
-# tng-connector / tng-master -config config.toml
+# tng-master -config config.toml
+# IRC servers, channels, owners, and SASL live in tng.db (admin UI).
 
-channels = ["#tng"]
-
-# After 001, if set: PRIVMSG NickServ :IDENTIFY <password>
-nickserv_password = ""
-
-[server]
-host = "irc.example.net"
-port = 6697
-tls = true
-# Lab/self-signed only. Never on a real network.
-tls_skip_verify = false
+database = "tng.db"
+# connector = "dist/dev/tng-connector"
 
 [identity]
 nick = "tng"
 user = "tng"
 realname = "tng"
 
-[sasl]
-enabled = false
-mechanism = "PLAIN"
-user = ""
-password = ""
-
-# Shared by gateway control API and admin UI. Required.
+# Admin UI login. Required.
 [control]
-listen = "127.0.0.1:7391"
 token = "change-me"
 
 [admin]
 listen = "127.0.0.1:8080"
-
-# nick!user@host with * and ? wildcards
-owners = ["you!ident@host"]
-admins = []

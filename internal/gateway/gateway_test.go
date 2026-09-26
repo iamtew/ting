@@ -53,7 +53,7 @@ func TestSessionJoin(t *testing.T) {
 		done <- "no JOIN"
 	}()
 
-	cfg := config.Config{
+	cfg := Spec{
 		Channels: []string{"#tng"},
 		Server:   config.Server{Host: "127.0.0.1", Port: addr.Port, TLS: false},
 		Identity: config.Identity{Nick: "tng", User: "tng", Realname: "tng"},

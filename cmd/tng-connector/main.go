@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -9,7 +10,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/iamtew/tng/internal/config"
 	"github.com/iamtew/tng/internal/control"
 	"github.com/iamtew/tng/internal/gateway"
 )
@@ -19,12 +19,24 @@ func main() {
 }
 
 func run() int {
-	path := flag.String("config", config.DefaultPath, "TOML config path")
+	listen := flag.String("listen", "", "loopback control listen addr")
+	token := flag.String("token", "", "control bearer token")
+	specPath := flag.String("spec", "", "JSON gateway spec path")
 	flag.Parse()
 
-	cfg, err := config.Load(*path)
+	if *listen == "" || *token == "" || *specPath == "" {
+		fmt.Fprintf(os.Stderr, "tng-connector: -listen, -token, and -spec are required\n")
+		return 1
+	}
+
+	raw, err := os.ReadFile(*specPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "tng-connector: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tng-connector: spec: %v\n", err)
+		return 1
+	}
+	var spec gateway.Spec
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		fmt.Fprintf(os.Stderr, "tng-connector: spec json: %v\n", err)
 		return 1
 	}
 
@@ -32,9 +44,9 @@ func run() int {
 	defer stop()
 
 	logger := log.New(os.Stderr, "tng-connector ", log.LstdFlags)
-	gw := gateway.New(cfg, logger)
-	ctl := control.New(gw, cfg.Control.Token, stop, logger)
-	ln, err := control.Listen(cfg.Control.Listen)
+	gw := gateway.New(spec, logger)
+	ctl := control.New(gw, *token, stop, logger)
+	ln, err := control.Listen(*listen)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tng-connector: control listen: %v\n", err)
 		return 1
@@ -49,7 +61,7 @@ func run() int {
 		ln.Close()
 	}()
 
-	logger.Printf("control %s — connecting %s as %s", cfg.Control.Listen, cfg.Addr(), cfg.Identity.Nick)
+	logger.Printf("control %s — connecting %s as %s", *listen, spec.Addr(), spec.Identity.Nick)
 	if err := gw.Run(ctx); err != nil && ctx.Err() == nil {
 		fmt.Fprintf(os.Stderr, "tng-connector: %v\n", err)
 		return 1

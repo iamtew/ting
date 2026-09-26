@@ -11,7 +11,7 @@ import (
 )
 
 func TestStaticPublic(t *testing.T) {
-	m := New(config.Config{}, nil, log.New(io.Discard, "", 0))
+	m := New(config.Config{}, nil, "", nil, log.New(io.Discard, "", 0))
 	srv := httptest.NewServer(m.Handler())
 	t.Cleanup(srv.Close)
 

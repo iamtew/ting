@@ -43,10 +43,10 @@ independently without impacting the IRC connection.
 ## v1: two processes (split early)
 
 ```text
-IRC -- gateway -- HTTP localhost control -- master (admin UI + commands)
+IRC -- connector (gateway) -- HTTP localhost control -- master (admin UI + commands + SQLite)
 ```
 
-Gateway owns the socket. Master owns the admin UI and IRC admin commands. IPC is stdlib HTTP on loopback (not NATS).
+Gateway owns the socket (one process per IRC server). Master owns the admin UI, SQLite (`tng.db`: servers, channels, owners/admins), and spawns connectors. IPC is stdlib HTTP on loopback (not NATS). Global nick/user/realname stay in TOML `[identity]`; per-server override in the DB.
 
 Gateway: connect, TLS, SASL PLAIN, NickServ, join/part, reconnect, outbound queue, channel/user maps.
 
@@ -71,11 +71,12 @@ Automode: if we have +o, keep owners/admins +o.
 - URL titles (generic, YouTube, X)
 - SQLite message/event log
 - AI: mention replies, `.summary`, optional memory
-- Extra networks / Discord etc. when v1 is boring
+- Discord etc. when v1 is boring
 - `.restart` / `.reload` / automode
 
 ## Build
 
 1. Gateway + join/recv/send/reconnect.
 2. Control HTTP + master admin UI + permissions + admin commands.
-3. Then links, then sqlite, then AI.
+3. SQLite servers + master-spawned connectors.
+4. Then links, then message log, then AI.

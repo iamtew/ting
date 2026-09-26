@@ -17,21 +17,46 @@
 </header>
 <div class="grid">
 <div class="ops">
+<div id="slist"></div>
 <p id="st">…</p>
 <div id="chs"></div>
+<form id="edit">
+<input name="name" placeholder="name">
+<input name="host" placeholder="host" required>
+<input name="port" placeholder="port" type="number">
+<label><input type="checkbox" name="tls"> tls</label>
+<label><input type="checkbox" name="tls_skip_verify"> skip verify</label>
+<label><input type="checkbox" name="enabled" checked> enabled</label>
+<input name="nick" placeholder="nick override">
+<input name="user" placeholder="user override">
+<input name="realname" placeholder="realname override">
+<input name="nickserv_password" placeholder="nickserv password" type="password">
+<label><input type="checkbox" name="sasl_enabled"> sasl</label>
+<input name="sasl_user" placeholder="sasl user">
+<input name="sasl_password" placeholder="sasl password" type="password">
+<textarea name="channels" placeholder="#channels one per line"></textarea>
+<textarea name="owners" placeholder="owner masks"></textarea>
+<textarea name="admins" placeholder="admin masks"></textarea>
+<button type="submit"><i class="fa-solid fa-floppy-disk"></i> save</button>
+<button type="button" id="newbtn"><i class="fa-solid fa-file"></i> new</button>
+<button type="button" id="delbtn" class="danger"><i class="fa-solid fa-trash"></i> delete</button>
+</form>
 <form id="join"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-plus"></i> join</button></form>
 <form id="part"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-minus"></i> part</button></form>
 <form id="say"><input name="target" placeholder="target"><input name="text" placeholder="text"><button><i class="fa-solid fa-comment"></i> say</button></form>
 <form id="nick"><input name="nick" placeholder="nick"><button><i class="fa-solid fa-id-card"></i> nick</button></form>
 <form id="raw"><input name="line" placeholder="raw IRC"><button><i class="fa-solid fa-terminal"></i> raw</button></form>
 <form id="quit"><button><i class="fa-solid fa-plug"></i> quit (reconnect)</button></form>
-<form id="shutdown"><button class="danger"><i class="fa-solid fa-power-off"></i> shutdown gateway</button></form>
+<form id="startf"><button><i class="fa-solid fa-play"></i> start</button></form>
+<form id="stopf"><button class="danger"><i class="fa-solid fa-power-off"></i> stop connector</button></form>
 </div>
 <pre id="log"></pre>
 </div>
 <script>
-async function api(path, body) {
-  const opt = {method: body === undefined ? 'GET' : 'POST'};
+let sid = 0, servers = [], pick = true, primed = false;
+function lines(s) { return (s || '').split(/[\s,]+/).map(x => x.trim()).filter(Boolean); }
+async function api(path, body, method) {
+  const opt = {method: method || (body === undefined ? 'GET' : 'POST')};
   if (body !== undefined) {
     opt.headers = {'Content-Type': 'application/json'};
     opt.body = JSON.stringify(body);
@@ -41,16 +66,68 @@ async function api(path, body) {
   if (!r.ok && r.status !== 204) alert(await r.text());
   return r;
 }
+function bundleFromForm(fd) {
+  return {
+    name: fd.get('name'), host: fd.get('host'), port: Number(fd.get('port') || 0),
+    tls: fd.get('tls') === 'on', tls_skip_verify: fd.get('tls_skip_verify') === 'on',
+    enabled: fd.get('enabled') === 'on',
+    nick: fd.get('nick'), user: fd.get('user'), realname: fd.get('realname'),
+    nickserv_password: fd.get('nickserv_password'),
+    sasl_enabled: fd.get('sasl_enabled') === 'on', sasl_mechanism: 'PLAIN',
+    sasl_user: fd.get('sasl_user'), sasl_password: fd.get('sasl_password'),
+    channels: lines(fd.get('channels')), owners: lines(fd.get('owners')), admins: lines(fd.get('admins'))
+  };
+}
+function fillForm(s) {
+  const f = document.getElementById('edit');
+  f.name.value = s.name || '';
+  f.host.value = s.host || '';
+  f.port.value = s.port || '';
+  f.tls.checked = !!s.tls;
+  f.tls_skip_verify.checked = !!s.tls_skip_verify;
+  f.enabled.checked = s.enabled !== false;
+  f.nick.value = s.nick || '';
+  f.user.value = s.user || '';
+  f.realname.value = s.realname || '';
+  f.nickserv_password.value = s.nickserv_password || '';
+  f.sasl_enabled.checked = !!s.sasl_enabled;
+  f.sasl_user.value = s.sasl_user || '';
+  f.sasl_password.value = s.sasl_password || '';
+  f.channels.value = (s.channels || []).join('\n');
+  f.owners.value = (s.owners || []).join('\n');
+  f.admins.value = (s.admins || []).join('\n');
+}
+function selected() { return servers.find(s => s.id === sid); }
 async function refresh() {
-  const r = await api('/api/status');
+  const r = await api('/api/servers');
   if (!r || !r.ok) return;
-  const s = await r.json();
+  servers = await r.json() || [];
+  if (pick && !sid && servers.length) sid = servers[0].id;
+  const sl = document.getElementById('slist');
+  sl.innerHTML = '';
+  for (const s of servers) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = (s.running ? '● ' : '○ ') + (s.name || s.host);
+    if (s.id === sid) b.classList.add('sel');
+    b.onclick = () => { pick = true; primed = true; sid = s.id; fillForm(s); refresh(); };
+    sl.appendChild(b);
+  }
+  const s = selected();
   const st = document.getElementById('st');
-  st.textContent = (s.connected ? 'up' : 'down') + ' ' + s.nick + ' ' + s.server;
-  st.className = s.connected ? 'up' : '';
+  if (!s) {
+    st.textContent = pick ? 'no servers' : 'new';
+    st.className = '';
+    document.getElementById('chs').textContent = '';
+    return;
+  }
+  if (!primed) { fillForm(s); primed = true; }
+  const g = s.gateway || {};
+  st.textContent = (s.running ? (g.connected ? 'up' : 'down') : 'stopped') + ' ' + (g.nick || '') + ' ' + (g.server || s.host) + (s.pid ? ' pid ' + s.pid : '');
+  st.className = g.connected ? 'up' : '';
   let t = '';
-  for (const ch of Object.keys(s.channels || {}).sort()) {
-    t += ch + ' ' + (s.channels[ch] || []).join(' ') + '\n';
+  for (const ch of Object.keys(g.channels || {}).sort()) {
+    t += ch + ' ' + (g.channels[ch] || []).join(' ') + '\n';
   }
   document.getElementById('chs').textContent = t;
 }
@@ -61,13 +138,29 @@ function bind(id, fn) {
     refresh();
   });
 }
-bind('join', fd => api('/api/join', {channel: fd.get('channel')}));
-bind('part', fd => api('/api/part', {channel: fd.get('channel')}));
-bind('say', fd => api('/api/privmsg', {target: fd.get('target'), text: fd.get('text')}));
-bind('nick', fd => api('/api/nick', {nick: fd.get('nick')}));
-bind('raw', fd => api('/api/raw', {line: fd.get('line')}));
-bind('quit', () => api('/api/quit', {reason: 'tng'}));
-bind('shutdown', () => api('/api/shutdown', {}));
+bind('edit', async fd => {
+  const body = bundleFromForm(fd);
+  if (sid) await api('/api/servers/' + sid, body, 'PUT');
+  else {
+    const r = await api('/api/servers', body, 'POST');
+    if (r && r.ok) { const s = await r.json(); sid = s.id; pick = true; primed = true; fillForm(s); }
+  }
+});
+document.getElementById('newbtn').onclick = () => { pick = false; sid = 0; primed = true; fillForm({enabled: true, tls: true}); };
+document.getElementById('delbtn').onclick = async () => {
+  if (!sid) return;
+  await api('/api/servers/' + sid, undefined, 'DELETE');
+  sid = 0;
+  refresh();
+};
+bind('join', fd => api('/api/join', {server_id: sid, channel: fd.get('channel')}));
+bind('part', fd => api('/api/part', {server_id: sid, channel: fd.get('channel')}));
+bind('say', fd => api('/api/privmsg', {server_id: sid, target: fd.get('target'), text: fd.get('text')}));
+bind('nick', fd => api('/api/nick', {server_id: sid, nick: fd.get('nick')}));
+bind('raw', fd => api('/api/raw', {server_id: sid, line: fd.get('line')}));
+bind('quit', () => api('/api/quit', {server_id: sid, reason: 'tng'}));
+bind('startf', () => api('/api/servers/' + sid + '/start', {}));
+bind('stopf', () => api('/api/servers/' + sid + '/stop', {}));
 refresh();
 setInterval(refresh, 2000);
 const log = document.getElementById('log');

@@ -17,7 +17,7 @@ Also needed:
 ## Recipes
 
 ```text
-just run       # gateway + master (needs config.toml)
+just run       # build connector + start master (needs config.toml)
 just stop      # kill leftover connector/master from `just run`
 just build     # stage working tree + linux amd64 binaries → dist/stage
 just package   # zip → dist/tng.zip (runs build)
@@ -41,18 +41,18 @@ Env vars, a gitignored `.env` in the repo root, or:
 just ship host=prod.example.com path=/opt/tng user=deploy
 ```
 
-On the Linux box: unzip `tng.zip` into the deploy path, copy `config.example.toml` to `config.toml`, edit, then run `./tng-connector` (gateway) and `./tng-master` (admin UI).
+On the Linux box: unzip `tng.zip` into the deploy path, copy `config.example.toml` to `config.toml`, edit identity and `control.token`, then run `./tng-master`. Master starts `tng-connector` children for each enabled server in `tng.db`. Add servers in the admin UI.
 
 ## Run locally
 
 ```text
-copy config.example.toml config.toml   # then edit token, owners, server
+copy config.example.toml config.toml   # then edit token and identity
 just run
 ```
 
-Opens admin UI at `http://127.0.0.1:8080` (token from `control.token`). Ctrl+C stops master and the gateway child.
+Opens admin UI at `http://127.0.0.1:8080` (token from `control.token`). Ctrl+C stops master and its connector children.
 
-Or separately: `go run ./cmd/tng-connector -config config.toml` and `go run ./cmd/tng-master -config config.toml`. Gateway reconnects until shutdown; Ctrl+C on the gateway process sends QUIT.
+Debug a connector alone: `tng-connector -listen 127.0.0.1:7391 -token x -spec spec.json`.
 
 ## Notes
 
