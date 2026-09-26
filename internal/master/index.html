@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tng</title>
+<style>
+body { font: 14px sans-serif; margin: 1rem; max-width: 52rem; }
+form { margin: .5rem 0; display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+input[type=text], input[type=password] { min-width: 10rem; }
+pre { background: #111; color: #ddd; padding: .6rem; height: 16rem; overflow: auto; }
+#chs { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>tng</h1>
+<p id="st">…</p>
+<div id="chs"></div>
+<form id="join"><input name="channel" placeholder="#channel"><button>join</button></form>
+<form id="part"><input name="channel" placeholder="#channel"><button>part</button></form>
+<form id="say"><input name="target" placeholder="target"><input name="text" placeholder="text"><button>say</button></form>
+<form id="nick"><input name="nick" placeholder="nick"><button>nick</button></form>
+<form id="raw"><input name="line" placeholder="raw IRC"><button>raw</button></form>
+<form id="quit"><button>quit (reconnect)</button></form>
+<form id="shutdown"><button>shutdown gateway</button></form>
+<pre id="log"></pre>
+<script>
+async function api(path, body) {
+  const opt = {method: body === undefined ? 'GET' : 'POST'};
+  if (body !== undefined) {
+    opt.headers = {'Content-Type': 'application/json'};
+    opt.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opt);
+  if (r.status === 401) { location.href = '/login'; return; }
+  if (!r.ok && r.status !== 204) alert(await r.text());
+  return r;
+}
+async function refresh() {
+  const r = await api('/api/status');
+  if (!r || !r.ok) return;
+  const s = await r.json();
+  document.getElementById('st').textContent = (s.connected ? 'up' : 'down') + ' ' + s.nick + ' ' + s.server;
+  let t = '';
+  for (const ch of Object.keys(s.channels || {}).sort()) {
+    t += ch + ' ' + (s.channels[ch] || []).join(' ') + '\n';
+  }
+  document.getElementById('chs').textContent = t;
+}
+function bind(id, fn) {
+  document.getElementById(id).addEventListener('submit', async e => {
+    e.preventDefault();
+    await fn(new FormData(e.target));
+    refresh();
+  });
+}
+bind('join', fd => api('/api/join', {channel: fd.get('channel')}));
+bind('part', fd => api('/api/part', {channel: fd.get('channel')}));
+bind('say', fd => api('/api/privmsg', {target: fd.get('target'), text: fd.get('text')}));
+bind('nick', fd => api('/api/nick', {nick: fd.get('nick')}));
+bind('raw', fd => api('/api/raw', {line: fd.get('line')}));
+bind('quit', () => api('/api/quit', {reason: 'tng'}));
+bind('shutdown', () => api('/api/shutdown', {}));
+refresh();
+setInterval(refresh, 2000);
+const log = document.getElementById('log');
+const es = new EventSource('/api/stream');
+es.onmessage = e => {
+  log.textContent += e.data + '\n';
+  log.scrollTop = log.scrollHeight;
+};
+</script>
+</body>
+</html>

@@ -17,7 +17,8 @@ Also needed:
 ## Recipes
 
 ```text
-just build     # stage working tree + linux amd64 binary → dist/stage
+just run       # gateway + master (needs config.toml)
+just build     # stage working tree + linux amd64 binaries → dist/stage
 just package   # zip → dist/tng.zip (runs build)
 just ship      # scp zip to prod (runs package)
 just clean     # wipe dist/
@@ -39,20 +40,22 @@ Env vars, a gitignored `.env` in the repo root, or:
 just ship host=prod.example.com path=/opt/tng user=deploy
 ```
 
-On the Linux box: unzip `tng.zip` into the deploy path, copy `config.example.toml` to `config.toml`, edit, then `./tng`.
+On the Linux box: unzip `tng.zip` into the deploy path, copy `config.example.toml` to `config.toml`, edit, then run `./tng-connector` (gateway) and `./tng-master` (admin UI).
 
 ## Run locally
 
 ```text
-copy config.example.toml config.toml   # then edit
-go run ./cmd/tng -config config.toml
+copy config.example.toml config.toml   # then edit token, owners, server
+just run
 ```
 
-Ctrl+C sends QUIT and exits. Gateway reconnects until then.
+Opens admin UI at `http://127.0.0.1:8080` (token from `control.token`). Ctrl+C stops master and the gateway child.
+
+Or separately: `go run ./cmd/tng-connector -config config.toml` and `go run ./cmd/tng-master -config config.toml`. Gateway reconnects until shutdown; Ctrl+C on the gateway process sends QUIT.
 
 ## Notes
 
 - Packaging copies the **working tree** (excludes `.git`, `dist/`, `.env`, `.cursor`). Uncommitted local files are included.
 - Justfile uses `[unix]` (bash) and `[windows]` (PowerShell) recipe variants; same recipe names on both.
 - Linux stages with `tar`, zips with `zip`. Windows copies with PowerShell, zips with `Compress-Archive`.
-- `just build` copies the working tree, then `GOOS=linux GOARCH=amd64 go build` into `dist/stage/tng` (prod is Linux). Local Windows runs use `go run ./cmd/tng`.
+- `just build` copies the working tree, then `GOOS=linux GOARCH=amd64 go build` into `dist/stage/tng-connector` and `dist/stage/tng-master` (prod is Linux). Local Windows runs use `just run`.

@@ -7,6 +7,7 @@ func TestValidateSASLNeedsTLS(t *testing.T) {
 		Server:   Server{Host: "irc.example.net", Port: 6667, TLS: false},
 		Identity: Identity{Nick: "tng"},
 		SASL:     SASL{Enabled: true, Mechanism: "PLAIN", User: "tng", Password: "x"},
+		Control:  Control{Token: "x"},
 	}
 	c.applyDefaults()
 	if err := c.Validate(); err == nil {

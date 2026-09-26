@@ -1,5 +1,5 @@
 # Copy to config.toml (gitignored) and edit before connecting.
-# tng -config config.toml
+# tng-connector / tng-master -config config.toml
 
 channels = ["#tng"]
 
@@ -23,3 +23,15 @@ enabled = false
 mechanism = "PLAIN"
 user = ""
 password = ""
+
+# Shared by gateway control API and admin UI. Required.
+[control]
+listen = "127.0.0.1:7391"
+token = "change-me"
+
+[admin]
+listen = "127.0.0.1:8080"
+
+# nick!user@host with * and ? wildcards
+owners = ["you!ident@host"]
+admins = []

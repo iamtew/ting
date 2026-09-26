@@ -33,8 +33,10 @@ build:
       --exclude='./.cursor' \
       . | tar -xf - -C "{{ stage_dir }}"
     echo "staged -> {{ stage_dir }}"
-    GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/tng" ./cmd/tng
-    echo "linux amd64 binary -> {{ stage_dir }}/tng"
+    GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/tng-connector" ./cmd/tng-connector
+    echo "linux amd64 binary -> {{ stage_dir }}/tng-connector"
+    GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/tng-master" ./cmd/tng-master
+    echo "linux amd64 binary -> {{ stage_dir }}/tng-master"
 
 [windows]
 build:
@@ -49,8 +51,12 @@ build:
     Write-Host "staged -> {{ stage_dir }}"
     $env:GOOS = "linux"
     $env:GOARCH = "amd64"
-    go build -o (Join-Path "{{ stage_dir }}" "tng") ./cmd/tng
-    Write-Host "linux amd64 binary -> {{ stage_dir }}/tng"
+    go build -o (Join-Path "{{ stage_dir }}" "tng-connector") ./cmd/tng-connector
+    Write-Host "linux amd64 binary -> {{ stage_dir }}/tng-connector"
+    $env:GOOS = "linux"
+    $env:GOARCH = "amd64"
+    go build -o (Join-Path "{{ stage_dir }}" "tng-master") ./cmd/tng-master
+    Write-Host "linux amd64 binary -> {{ stage_dir }}/tng-master"
 
 # ── package: zip dist/stage → dist/tng.zip ─────────────────────────────
 
@@ -98,6 +104,38 @@ ship host=prod_host path=prod_path user=prod_user: package
     $dest = "${target}:{{ path }}/"
     Write-Host "scp {{ artifact }} $dest"
     scp "{{ artifact }}" $dest
+
+# ── run: gateway + master from repo root (dev) ─────────────────────────
+
+[unix]
+run:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ ! -f config.toml ]]; then
+      echo "error: copy config.example.toml to config.toml" >&2
+      exit 1
+    fi
+    go run ./cmd/tng-connector -config config.toml &
+    gw=$!
+    trap 'kill $gw 2>/dev/null || true' EXIT INT TERM
+    go run ./cmd/tng-master -config config.toml
+
+[windows]
+run:
+    #!powershell.exe
+    $ErrorActionPreference = "Stop"
+    if (-not (Test-Path "config.toml")) {
+      Write-Error "copy config.example.toml to config.toml"
+      exit 1
+    }
+    $gw = Start-Process -FilePath "go" -ArgumentList @("run","./cmd/tng-connector","-config","config.toml") -NoNewWindow -PassThru
+    try {
+      go run ./cmd/tng-master -config config.toml
+    } finally {
+      if ($gw -and -not $gw.HasExited) {
+        Stop-Process -Id $gw.Id -Force -ErrorAction SilentlyContinue
+      }
+    }
 
 # ── clean ──────────────────────────────────────────────────────────────
 

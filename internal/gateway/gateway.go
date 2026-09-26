@@ -37,9 +37,10 @@ type Gateway struct {
 	events chan Event
 	out    chan string
 
-	mu    sync.RWMutex
-	nick  string
-	chans map[string]map[string]struct{} // folded channel -> nick set
+	mu        sync.RWMutex
+	nick      string
+	connected bool
+	chans     map[string]map[string]struct{} // folded channel -> nick set
 }
 
 func New(cfg config.Config, logger *log.Logger) *Gateway {
@@ -57,6 +58,8 @@ func New(cfg config.Config, logger *log.Logger) *Gateway {
 }
 
 func (g *Gateway) Events() <-chan Event { return g.events }
+
+func (g *Gateway) Addr() string { return g.cfg.Addr() }
 
 func (g *Gateway) Send(line string) {
 	select {
@@ -87,11 +90,34 @@ func (g *Gateway) ChannelNicks(channel string) []string {
 	return out
 }
 
+func (g *Gateway) Channels() []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	out := make([]string, 0, len(g.chans))
+	for ch := range g.chans {
+		out = append(out, ch)
+	}
+	return out
+}
+
+func (g *Gateway) Connected() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.connected
+}
+
+func (g *Gateway) setConnected(v bool) {
+	g.mu.Lock()
+	g.connected = v
+	g.mu.Unlock()
+}
+
 func (g *Gateway) Run(ctx context.Context) error {
 	defer close(g.events)
 	backoff := time.Second
 	for {
 		err := g.session(ctx)
+		g.setConnected(false)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -208,6 +234,7 @@ func (g *Gateway) handle(msg Message) error {
 			g.nick = msg.Params[0]
 			g.mu.Unlock()
 		}
+		g.setConnected(true)
 		g.emit(Event{Kind: "connected", Msg: msg})
 		if p := g.cfg.NickServPassword; p != "" {
 			g.Privmsg("NickServ", "IDENTIFY "+p)

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -13,9 +14,13 @@ const DefaultPath = "config.toml"
 type Config struct {
 	Channels         []string `toml:"channels"`
 	NickServPassword string   `toml:"nickserv_password"`
+	Owners           []string `toml:"owners"`
+	Admins           []string `toml:"admins"`
 	Server           Server   `toml:"server"`
 	Identity         Identity `toml:"identity"`
 	SASL             SASL     `toml:"sasl"`
+	Control          Control  `toml:"control"`
+	Admin            Admin    `toml:"admin"`
 }
 
 type Server struct {
@@ -36,6 +41,15 @@ type SASL struct {
 	Mechanism string `toml:"mechanism"`
 	User      string `toml:"user"`
 	Password  string `toml:"password"`
+}
+
+type Control struct {
+	Listen string `toml:"listen"`
+	Token  string `toml:"token"`
+}
+
+type Admin struct {
+	Listen string `toml:"listen"`
 }
 
 func Load(path string) (Config, error) {
@@ -70,6 +84,12 @@ func (c *Config) applyDefaults() {
 	if strings.TrimSpace(c.SASL.Mechanism) == "" {
 		c.SASL.Mechanism = "PLAIN"
 	}
+	if strings.TrimSpace(c.Control.Listen) == "" {
+		c.Control.Listen = "127.0.0.1:7391"
+	}
+	if strings.TrimSpace(c.Admin.Listen) == "" {
+		c.Admin.Listen = "127.0.0.1:8080"
+	}
 }
 
 func (c Config) Validate() error {
@@ -81,6 +101,15 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.Identity.Nick) == "" {
 		return fmt.Errorf("identity.nick is required")
+	}
+	if strings.TrimSpace(c.Control.Token) == "" {
+		return fmt.Errorf("control.token is required")
+	}
+	if err := loopbackListen("control.listen", c.Control.Listen); err != nil {
+		return err
+	}
+	if err := loopbackListen("admin.listen", c.Admin.Listen); err != nil {
+		return err
 	}
 	if !c.SASL.Enabled {
 		return nil
@@ -94,6 +123,21 @@ func (c Config) Validate() error {
 	}
 	if !c.Server.TLS {
 		return fmt.Errorf("sasl PLAIN requires server.tls = true")
+	}
+	return nil
+}
+
+func loopbackListen(field, addr string) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("%s %q: %w", field, addr, err)
+	}
+	if strings.EqualFold(host, "localhost") {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return fmt.Errorf("%s must be loopback, got %q", field, host)
 	}
 	return nil
 }

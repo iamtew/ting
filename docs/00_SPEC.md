@@ -40,13 +40,13 @@ independently without impacting the IRC connection.
 3. stdlib first. SQLite if we persist. TOML config.
 4. Reconnect. Unattended for months. Windows + Linux.
 
-## v1: one process
+## v1: two processes (split early)
 
 ```text
-IRC -- gateway -- chan Event -- admin / links / logger / ai
+IRC -- gateway -- HTTP localhost control -- master (admin UI + commands)
 ```
 
-In-process `chan` is the bus. Split into processes (NATS, whatever) when a module crash taking down IRC is a real problem.
+Gateway owns the socket. Master owns the admin UI and IRC admin commands. IPC is stdlib HTTP on loopback (not NATS).
 
 Gateway: connect, TLS, SASL PLAIN, NickServ, join/part, reconnect, outbound queue, channel/user maps.
 
@@ -71,10 +71,11 @@ Automode: if we have +o, keep owners/admins +o.
 - URL titles (generic, YouTube, X)
 - SQLite message/event log
 - AI: mention replies, `.summary`, optional memory
-- Dashboard / extra networks / Discord etc. when v1 is boring
+- Extra networks / Discord etc. when v1 is boring
+- `.restart` / `.reload` / automode
 
 ## Build
 
-1. Gateway + in-process bus + join/recv/send/reconnect.
-2. Permissions, admin commands, automode.
+1. Gateway + join/recv/send/reconnect.
+2. Control HTTP + master admin UI + permissions + admin commands.
 3. Then links, then sqlite, then AI.
