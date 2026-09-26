@@ -55,6 +55,7 @@ header {
   gap: .75rem;
   margin: 0 0 1rem;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 .mark {
   height: 4.5rem;
@@ -76,19 +77,81 @@ h1 {
   border: 4px solid var(--line);
   color: var(--yell);
 }
-.grid {
-  display: grid;
-  grid-template-columns: minmax(16rem, 22rem) 1fr;
-  grid-template-rows: minmax(0, 1fr);
-  gap: 1rem;
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-left: auto;
+}
+.tabs button { background: var(--panel); color: var(--ink); }
+.tabs button.on { background: var(--mute); color: var(--yell); }
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  margin: 0 0 1rem;
+  flex-shrink: 0;
+}
+.strip form { margin: 0; }
+.stage {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
-.ops { min-width: 0; min-height: 0; overflow: auto; }
-#slist { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; }
-#slist button { flex: 1; min-width: 6rem; }
-#slist button.sel { background: var(--mute); color: var(--yell); }
+.stage > section {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.stage > section[hidden] { display: none; }
+label.pick {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  flex: 1;
+  min-width: 14rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+label.pick select { width: 100%; }
+#edit { max-width: 40rem; flex-direction: column; align-items: stretch; gap: .8rem; }
+#tab-control { gap: .8rem; align-items: stretch; }
+fieldset {
+  border: 4px solid var(--line);
+  margin: 0;
+  padding: .7rem;
+  min-width: 0;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+}
+legend {
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--yell);
+  background: var(--mute);
+  border: 4px solid var(--line);
+  padding: .1rem .45rem;
+}
+label.field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .25rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  min-width: 0;
+  flex: 1;
+}
+.row { display: flex; gap: .4rem; flex-wrap: wrap; align-items: flex-end; }
+.actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+.actions button { flex: 1; }
+label.field input, label.field select, label.field textarea { flex: none; width: 100%; }
 textarea {
   width: 100%;
   min-height: 3.5rem;
@@ -102,7 +165,7 @@ textarea {
 label { display: flex; align-items: center; gap: .35rem; }
 #st {
   display: inline-block;
-  margin: 0 0 1rem;
+  margin: 0;
   padding: .25rem .5rem;
   border: 4px solid var(--line);
   background: var(--panel);
@@ -115,8 +178,9 @@ label { display: flex; align-items: center; gap: .35rem; }
   background: var(--panel);
   border: 4px solid var(--line);
   padding: .6rem;
-  margin: 0 0 1rem;
+  margin: 0;
   min-height: 3rem;
+  flex: 1;
 }
 form {
   margin: .5rem 0;
@@ -135,9 +199,20 @@ input {
   padding: .35rem .45rem;
   border-radius: 0;
 }
-input:focus {
+input:focus, select:focus {
   outline: none;
   border-color: var(--yell);
+}
+input[type="checkbox"] { flex: none; width: auto; }
+select {
+  font: inherit;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--mute);
+  border: 4px solid var(--line);
+  padding: .35rem .45rem;
+  border-radius: 0;
 }
 button {
   font: inherit;
@@ -170,12 +245,10 @@ button.danger { background: var(--mute); color: var(--yell); }
 .login label { display: flex; flex-direction: column; gap: .3rem; font-weight: 700; text-transform: uppercase; }
 
 @media (max-width: 700px) {
-  .grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(10rem, 1fr);
-  }
   .mark { height: 3rem; }
-  h1 { font-size: 1.35rem; }
+  h1 { font-size: 1.35rem; flex: 1 1 auto; }
+  .tabs { margin-left: 0; width: 100%; }
+  .tabs button { flex: 1; }
   form { flex-direction: column; }
   button { width: 100%; }
 }

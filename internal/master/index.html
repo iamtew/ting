@@ -14,43 +14,86 @@
 <header>
   <img class="mark" src="/static/img/dummy.png" alt="">
   <h1>tng</h1>
+  <nav class="tabs">
+    <button type="button" data-tab="live">live</button>
+    <button type="button" data-tab="server">server</button>
+    <button type="button" data-tab="control">control</button>
+    <button type="button" data-tab="log">log</button>
+  </nav>
 </header>
-<div class="grid">
-<div class="ops">
-<div id="slist"></div>
+<div class="strip">
+<label class="pick">server <select id="slist"></select></label>
 <p id="st">…</p>
+<form id="startf"><button><i class="fa-solid fa-play"></i> start</button></form>
+<form id="stopf"><button class="danger"><i class="fa-solid fa-power-off"></i> stop connector</button></form>
+</div>
+<div class="stage">
+<section id="tab-live">
 <div id="chs"></div>
+</section>
+<section id="tab-server" hidden>
 <form id="edit">
-<input name="name" placeholder="name">
-<input name="host" placeholder="host" required>
-<input name="port" placeholder="port" type="number">
-<label><input type="checkbox" name="tls"> tls</label>
-<label><input type="checkbox" name="tls_skip_verify"> skip verify</label>
-<label><input type="checkbox" name="enabled" checked> enabled</label>
-<input name="nick" placeholder="nick override">
-<input name="user" placeholder="user override">
-<input name="realname" placeholder="realname override">
-<input name="nickserv_password" placeholder="nickserv password" type="password">
-<label><input type="checkbox" name="sasl_enabled"> sasl</label>
-<input name="sasl_user" placeholder="sasl user">
-<input name="sasl_password" placeholder="sasl password" type="password">
-<textarea name="channels" placeholder="#channels one per line"></textarea>
-<textarea name="owners" placeholder="owner masks"></textarea>
-<textarea name="admins" placeholder="admin masks"></textarea>
+<fieldset>
+<legend>connection</legend>
+<label class="field">name <input name="name"></label>
+<div class="row">
+<label class="field">host <input name="host" required></label>
+<label class="field">port <input name="port" type="number"></label>
+</div>
+<div class="row">
+<label class="field">tls
+<select name="tls_mode">
+<option value="on">on</option>
+<option value="skip">on, skip verify</option>
+<option value="off">off</option>
+</select>
+</label>
+<label class="check"><input type="checkbox" name="enabled" checked> enabled</label>
+</div>
+</fieldset>
+<fieldset>
+<legend>identity</legend>
+<label class="field">nick <input name="nick" placeholder="override"></label>
+<label class="field">user <input name="user" placeholder="override"></label>
+<label class="field">realname <input name="realname" placeholder="override"></label>
+</fieldset>
+<fieldset>
+<legend>auth</legend>
+<label class="field">nickserv <input name="nickserv_password" type="password" placeholder="password"></label>
+<label class="check"><input type="checkbox" name="sasl_enabled"> sasl plain</label>
+<label class="field">sasl user <input name="sasl_user"></label>
+<label class="field">sasl password <input name="sasl_password" type="password"></label>
+</fieldset>
+<fieldset>
+<legend>access</legend>
+<label class="field">channels <textarea name="channels" placeholder="one per line"></textarea></label>
+<label class="field">owners <textarea name="owners" placeholder="nick!user@host"></textarea></label>
+<label class="field">admins <textarea name="admins" placeholder="nick!user@host"></textarea></label>
+</fieldset>
+<div class="actions">
 <button type="submit"><i class="fa-solid fa-floppy-disk"></i> save</button>
 <button type="button" id="newbtn"><i class="fa-solid fa-file"></i> new</button>
 <button type="button" id="delbtn" class="danger"><i class="fa-solid fa-trash"></i> delete</button>
+</div>
 </form>
+</section>
+<section id="tab-control" hidden>
+<fieldset>
+<legend>channel</legend>
 <form id="join"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-plus"></i> join</button></form>
 <form id="part"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-minus"></i> part</button></form>
+</fieldset>
+<fieldset>
+<legend>talk</legend>
 <form id="say"><input name="target" placeholder="target"><input name="text" placeholder="text"><button><i class="fa-solid fa-comment"></i> say</button></form>
 <form id="nick"><input name="nick" placeholder="nick"><button><i class="fa-solid fa-id-card"></i> nick</button></form>
 <form id="raw"><input name="line" placeholder="raw IRC"><button><i class="fa-solid fa-terminal"></i> raw</button></form>
 <form id="quit"><button><i class="fa-solid fa-plug"></i> quit (reconnect)</button></form>
-<form id="startf"><button><i class="fa-solid fa-play"></i> start</button></form>
-<form id="stopf"><button class="danger"><i class="fa-solid fa-power-off"></i> stop connector</button></form>
-</div>
+</fieldset>
+</section>
+<section id="tab-log" hidden>
 <pre id="log"></pre>
+</section>
 </div>
 <script>
 let sid = 0, servers = [], pick = true, primed = false;
@@ -69,7 +112,7 @@ async function api(path, body, method) {
 function bundleFromForm(fd) {
   return {
     name: fd.get('name'), host: fd.get('host'), port: Number(fd.get('port') || 0),
-    tls: fd.get('tls') === 'on', tls_skip_verify: fd.get('tls_skip_verify') === 'on',
+    tls: fd.get('tls_mode') !== 'off', tls_skip_verify: fd.get('tls_mode') === 'skip',
     enabled: fd.get('enabled') === 'on',
     nick: fd.get('nick'), user: fd.get('user'), realname: fd.get('realname'),
     nickserv_password: fd.get('nickserv_password'),
@@ -83,8 +126,7 @@ function fillForm(s) {
   f.name.value = s.name || '';
   f.host.value = s.host || '';
   f.port.value = s.port || '';
-  f.tls.checked = !!s.tls;
-  f.tls_skip_verify.checked = !!s.tls_skip_verify;
+  f.tls_mode.value = !s.tls ? 'off' : (s.tls_skip_verify ? 'skip' : 'on');
   f.enabled.checked = s.enabled !== false;
   f.nick.value = s.nick || '';
   f.user.value = s.user || '';
@@ -104,15 +146,14 @@ async function refresh() {
   servers = await r.json() || [];
   if (pick && !sid && servers.length) sid = servers[0].id;
   const sl = document.getElementById('slist');
-  sl.innerHTML = '';
-  for (const s of servers) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = (s.running ? '● ' : '○ ') + (s.name || s.host);
-    if (s.id === sid) b.classList.add('sel');
-    b.onclick = () => { pick = true; primed = true; sid = s.id; fillForm(s); refresh(); };
-    sl.appendChild(b);
+  const sig = (pick ? '' : 'new\n') + servers.map(s => s.id + (s.running ? '●' : '○') + (s.name || s.host)).join('\n');
+  if (sl.dataset.sig !== sig) {
+    sl.dataset.sig = sig;
+    sl.replaceChildren();
+    if (!pick) sl.add(new Option('new', '0'));
+    for (const s of servers) sl.add(new Option((s.running ? '● ' : '○ ') + (s.name || s.host), s.id));
   }
+  sl.value = pick ? String(sid || '') : '0';
   const s = selected();
   const st = document.getElementById('st');
   if (!s) {
@@ -146,11 +187,19 @@ bind('edit', async fd => {
     if (r && r.ok) { const s = await r.json(); sid = s.id; pick = true; primed = true; fillForm(s); }
   }
 });
-document.getElementById('newbtn').onclick = () => { pick = false; sid = 0; primed = true; fillForm({enabled: true, tls: true}); };
+document.getElementById('slist').onchange = () => {
+  const id = Number(document.getElementById('slist').value);
+  if (!id) return;
+  const s = servers.find(x => x.id === id);
+  if (!s) return;
+  pick = true; primed = true; sid = id; fillForm(s);
+};
+document.getElementById('newbtn').onclick = () => { pick = false; sid = 0; primed = true; fillForm({enabled: true, tls: true}); refresh(); };
 document.getElementById('delbtn').onclick = async () => {
   if (!sid) return;
   await api('/api/servers/' + sid, undefined, 'DELETE');
   sid = 0;
+  primed = false;
   refresh();
 };
 bind('join', fd => api('/api/join', {server_id: sid, channel: fd.get('channel')}));
@@ -161,6 +210,21 @@ bind('raw', fd => api('/api/raw', {server_id: sid, line: fd.get('line')}));
 bind('quit', () => api('/api/quit', {server_id: sid, reason: 'tng'}));
 bind('startf', () => api('/api/servers/' + sid + '/start', {}));
 bind('stopf', () => api('/api/servers/' + sid + '/stop', {}));
+const tabs = ['live', 'server', 'control', 'log'];
+function showTab(name) {
+  if (!tabs.includes(name)) name = 'live';
+  for (const t of tabs) {
+    document.getElementById('tab-' + t).hidden = t !== name;
+    document.querySelector('[data-tab="' + t + '"]').classList.toggle('on', t === name);
+  }
+  if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+}
+document.querySelector('.tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]');
+  if (b) showTab(b.dataset.tab);
+});
+addEventListener('hashchange', () => showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1));
 refresh();
 setInterval(refresh, 2000);
 const log = document.getElementById('log');
