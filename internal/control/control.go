@@ -64,6 +64,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /nick", s.auth(s.nick))
 	mux.HandleFunc("POST /raw", s.auth(s.raw))
 	mux.HandleFunc("POST /quit", s.auth(s.quit))
+	mux.HandleFunc("POST /channels", s.auth(s.channels))
 	mux.HandleFunc("POST /shutdown", s.auth(s.doShutdown))
 	return mux
 }
@@ -201,6 +202,23 @@ func (s *Server) quit(w http.ResponseWriter, r *http.Request) {
 		line += " :tng"
 	}
 	s.gw.Send(line)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) channels(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Channels []string `json:"channels"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	join, part := s.gw.SetChannels(req.Channels)
+	for _, ch := range join {
+		s.gw.Send("JOIN " + ch)
+	}
+	for _, ch := range part {
+		s.gw.Send("PART " + ch)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -22,6 +22,7 @@ type proc struct {
 	cl     *control.Client
 	listen string
 	spec   string
+	pid    int
 	cancel context.CancelFunc
 }
 
@@ -84,7 +85,9 @@ func (m *Master) withRuntime(b store.Bundle) runtime {
 	}
 	rt.Running = true
 	rt.Listen = p.listen
-	if p.cmd != nil && p.cmd.Process != nil {
+	if p.pid != 0 {
+		rt.PID = p.pid
+	} else if p.cmd != nil && p.cmd.Process != nil {
 		rt.PID = p.cmd.Process.Pid
 	}
 	if st, err := p.cl.Status(); err == nil {
@@ -96,6 +99,14 @@ func (m *Master) withRuntime(b store.Bundle) runtime {
 func (m *Master) StartServer(ctx context.Context, id int64) error {
 	if m.running(id) {
 		return nil
+	}
+	if m.db != nil {
+		if c, err := m.db.Connector(id); err == nil && c.Listen != "" {
+			if m.attach(id, c) {
+				m.log.Printf("adopted server %d pid %d control %s", id, c.PID, c.Listen)
+				return nil
+			}
+		}
 	}
 	if m.connector == "" {
 		return fmt.Errorf("no connector binary")
@@ -124,6 +135,7 @@ func (m *Master) StartServer(ctx context.Context, id int64) error {
 	cmd := exec.Command(m.connector, "-listen", listen, "-token", tok, "-spec", specPath)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
+	isolateChild(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -134,14 +146,32 @@ func (m *Master) StartServer(ctx context.Context, id int64) error {
 		return err
 	}
 	pctx, cancel := context.WithCancel(context.Background())
-	p := &proc{id: id, cmd: cmd, cl: cl, listen: listen, spec: specPath, cancel: cancel}
+	p := &proc{id: id, cmd: cmd, cl: cl, listen: listen, spec: specPath, pid: cmd.Process.Pid, cancel: cancel}
 	m.mu.Lock()
 	m.procs[id] = p
 	m.mu.Unlock()
+	if err := m.db.PutConnector(store.Connector{ServerID: id, Listen: listen, Token: tok, PID: cmd.Process.Pid}); err != nil {
+		m.log.Printf("persist connector %d: %v", id, err)
+	}
 	go m.reap(p)
 	go m.consumeOne(pctx, p)
 	m.log.Printf("connector server %d pid %d control %s", id, cmd.Process.Pid, listen)
 	return nil
+}
+
+func (m *Master) attach(id int64, c store.Connector) bool {
+	cl := control.NewClient("http://"+c.Listen, c.Token)
+	if _, err := cl.Status(); err != nil {
+		_ = m.db.ClearConnector(id)
+		return false
+	}
+	pctx, cancel := context.WithCancel(context.Background())
+	p := &proc{id: id, cl: cl, listen: c.Listen, pid: c.PID, cancel: cancel}
+	m.mu.Lock()
+	m.procs[id] = p
+	m.mu.Unlock()
+	go m.consumeOne(pctx, p)
+	return true
 }
 
 func (m *Master) StopServer(id int64) error {
@@ -168,11 +198,21 @@ func (m *Master) StopServer(id int64) error {
 		p.cancel()
 	}
 	_ = p.cl.Shutdown()
-	if p.cmd.Process != nil {
+	if p.cmd != nil && p.cmd.Process != nil {
 		time.AfterFunc(2*time.Second, func() { _ = p.cmd.Process.Kill() })
 	}
-	_ = os.Remove(p.spec)
+	if p.spec != "" {
+		_ = os.Remove(p.spec)
+	}
+	if m.db != nil {
+		_ = m.db.ClearConnector(id)
+	}
 	return nil
+}
+
+func (m *Master) CycleServer(ctx context.Context, id int64) error {
+	_ = m.StopServer(id)
+	return m.StartServer(ctx, id)
 }
 
 func (m *Master) reap(p *proc) {

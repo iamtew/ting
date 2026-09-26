@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/iamtew/tng/internal/config"
@@ -13,6 +14,13 @@ import (
 
 type DB struct {
 	sql *sql.DB
+}
+
+type Connector struct {
+	ServerID int64
+	Listen   string
+	Token    string
+	PID      int
 }
 
 type Bundle struct {
@@ -84,6 +92,12 @@ CREATE TABLE IF NOT EXISTS acl (
   role TEXT NOT NULL CHECK(role IN ('owner','admin')),
   mask TEXT NOT NULL,
   PRIMARY KEY (server_id, role, mask)
+);
+CREATE TABLE IF NOT EXISTS connector (
+  server_id INTEGER PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+  listen TEXT NOT NULL,
+  token TEXT NOT NULL,
+  pid INTEGER NOT NULL DEFAULT 0
 );`)
 	return err
 }
@@ -106,6 +120,16 @@ func MergeIdentity(g config.Identity, nick, user, realname string) config.Identi
 		out.Realname = out.Nick
 	}
 	return out
+}
+
+func SpecEqual(g config.Identity, a, b Bundle) bool {
+	return reflect.DeepEqual(Spec(g, a), Spec(g, b))
+}
+
+func DialEqual(g config.Identity, a, b Bundle) bool {
+	sa, sb := Spec(g, a), Spec(g, b)
+	sa.Channels, sb.Channels = nil, nil
+	return reflect.DeepEqual(sa, sb)
 }
 
 func Spec(g config.Identity, b Bundle) gateway.Spec {
@@ -348,6 +372,25 @@ UPDATE servers SET name=?, host=?, port=?, tls=?, tls_skip_verify=?, enabled=?, 
 
 func (d *DB) Delete(id int64) error {
 	_, err := d.sql.Exec(`DELETE FROM servers WHERE id=?`, id)
+	return err
+}
+
+func (d *DB) Connector(id int64) (Connector, error) {
+	var c Connector
+	err := d.sql.QueryRow(`SELECT server_id, listen, token, pid FROM connector WHERE server_id=?`, id).Scan(&c.ServerID, &c.Listen, &c.Token, &c.PID)
+	return c, err
+}
+
+func (d *DB) PutConnector(c Connector) error {
+	_, err := d.sql.Exec(`
+INSERT INTO connector (server_id, listen, token, pid) VALUES (?,?,?,?)
+ON CONFLICT(server_id) DO UPDATE SET listen=excluded.listen, token=excluded.token, pid=excluded.pid`,
+		c.ServerID, c.Listen, c.Token, c.PID)
+	return err
+}
+
+func (d *DB) ClearConnector(id int64) error {
+	_, err := d.sql.Exec(`DELETE FROM connector WHERE server_id=?`, id)
 	return err
 }
 

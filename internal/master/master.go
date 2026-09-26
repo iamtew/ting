@@ -71,6 +71,7 @@ func (m *Master) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/servers/{id}", m.auth(m.apiServersDelete))
 	mux.HandleFunc("POST /api/servers/{id}/start", m.auth(m.apiServersStart))
 	mux.HandleFunc("POST /api/servers/{id}/stop", m.auth(m.apiServersStop))
+	mux.HandleFunc("POST /api/servers/{id}/cycle", m.auth(m.apiServersCycle))
 	mux.HandleFunc("POST /api/join", m.auth(m.apiJoin))
 	mux.HandleFunc("POST /api/part", m.auth(m.apiPart))
 	mux.HandleFunc("POST /api/privmsg", m.auth(m.apiPrivmsg))
@@ -104,18 +105,6 @@ func (m *Master) Boot(ctx context.Context) {
 				m.log.Printf("start %d: %v", b.ID, err)
 			}
 		}
-	}
-}
-
-func (m *Master) ShutdownChildren() {
-	m.mu.Lock()
-	ids := make([]int64, 0, len(m.procs))
-	for id := range m.procs {
-		ids = append(ids, id)
-	}
-	m.mu.Unlock()
-	for _, id := range ids {
-		m.StopServer(id)
 	}
 }
 
@@ -460,21 +449,41 @@ func (m *Master) apiServersPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.ID = id
+	old, err := m.db.Get(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 	out, err := m.db.Put(b)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	running := m.running(id)
-	if out.Enabled {
+	switch {
+	case !out.Enabled:
 		if running {
 			_ = m.StopServer(id)
 		}
+	case !running:
+		if err := m.StartServer(r.Context(), id); err != nil {
+			m.log.Printf("start %d: %v", id, err)
+		}
+	case store.SpecEqual(m.cfg.Identity, old, out):
+	case store.DialEqual(m.cfg.Identity, old, out):
+		cl, err := m.client(id)
+		if err != nil {
+			m.log.Printf("channels %d: %v", id, err)
+			break
+		}
+		if err := cl.SyncChannels(out.Channels); err != nil {
+			m.log.Printf("channels %d: %v", id, err)
+		}
+	default:
+		_ = m.StopServer(id)
 		if err := m.StartServer(r.Context(), id); err != nil {
 			m.log.Printf("restart %d: %v", id, err)
 		}
-	} else if running {
-		_ = m.StopServer(id)
 	}
 	writeJSON(w, m.withRuntime(out))
 }
@@ -514,6 +523,19 @@ func (m *Master) apiServersStop(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := m.StopServer(id); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (m *Master) apiServersCycle(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	if err := m.CycleServer(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

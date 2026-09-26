@@ -66,3 +66,53 @@ func TestValidateSASLNeedsTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSpecEqualIgnoresNameACL(t *testing.T) {
+	g := config.Identity{Nick: "tng", User: "tng", Realname: "tng"}
+	a := Bundle{Host: "irc.example.net", Port: 6697, TLS: true, Name: "a", Owners: []string{"x!*@*"}}
+	b := Bundle{Host: "irc.example.net", Port: 6697, TLS: true, Name: "b", Admins: []string{"y!*@*"}}
+	if !SpecEqual(g, a, b) {
+		t.Fatal("name/acl must not force restart")
+	}
+	b.Host = "other.net"
+	if SpecEqual(g, a, b) {
+		t.Fatal("host change must not be equal")
+	}
+	b.Host = a.Host
+	b.Channels = []string{"#x"}
+	if SpecEqual(g, a, b) {
+		t.Fatal("channel change must not be equal")
+	}
+	if !DialEqual(g, a, b) {
+		t.Fatal("channel-only must still dial-equal")
+	}
+	b.Host = "other.net"
+	if DialEqual(g, a, b) {
+		t.Fatal("host change must not be dial-equal")
+	}
+}
+
+func TestConnectorPersist(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "tng.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	b, err := d.Put(Bundle{Host: "irc.example.net", TLS: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.PutConnector(Connector{ServerID: b.ID, Listen: "127.0.0.1:1", Token: "t", PID: 7}); err != nil {
+		t.Fatal(err)
+	}
+	c, err := d.Connector(b.ID)
+	if err != nil || c.Listen != "127.0.0.1:1" || c.Token != "t" || c.PID != 7 {
+		t.Fatalf("%+v %v", c, err)
+	}
+	if err := d.ClearConnector(b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Connector(b.ID); err == nil {
+		t.Fatal("want gone")
+	}
+}

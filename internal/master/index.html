@@ -25,6 +25,7 @@
 <label class="pick">server <select id="slist"></select></label>
 <p id="st">…</p>
 <form id="startf"><button><i class="fa-solid fa-play"></i> start</button></form>
+<form id="cyclef"><button><i class="fa-solid fa-rotate"></i> cycle</button></form>
 <form id="stopf"><button class="danger"><i class="fa-solid fa-power-off"></i> stop connector</button></form>
 </div>
 <div class="stage">
@@ -209,6 +210,7 @@ bind('nick', fd => api('/api/nick', {server_id: sid, nick: fd.get('nick')}));
 bind('raw', fd => api('/api/raw', {server_id: sid, line: fd.get('line')}));
 bind('quit', () => api('/api/quit', {server_id: sid, reason: 'tng'}));
 bind('startf', () => api('/api/servers/' + sid + '/start', {}));
+bind('cyclef', () => api('/api/servers/' + sid + '/cycle', {}));
 bind('stopf', () => api('/api/servers/' + sid + '/stop', {}));
 const tabs = ['live', 'server', 'control', 'log'];
 function showTab(name) {

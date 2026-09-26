@@ -50,7 +50,7 @@ copy config.example.toml config.toml   # then edit token and identity
 just run
 ```
 
-Opens admin UI at `http://127.0.0.1:8080` (token from `control.token`). Ctrl+C stops master and its connector children.
+Opens admin UI at `http://127.0.0.1:8080` (token from `control.token`). Ctrl+C stops master only; connectors stay on IRC. `just stop` kills leftovers. Cycle in the admin UI restarts a connector on purpose.
 
 Debug a connector alone: `tng-connector -listen 127.0.0.1:7391 -token x -spec spec.json`.
 

@@ -56,6 +56,13 @@ func (c *Client) Quit(reason string) error {
 	return c.do(http.MethodPost, "/quit", map[string]string{"reason": reason}, nil)
 }
 
+func (c *Client) SyncChannels(channels []string) error {
+	if channels == nil {
+		channels = []string{}
+	}
+	return c.do(http.MethodPost, "/channels", map[string][]string{"channels": channels}, nil)
+}
+
 func (c *Client) Shutdown() error {
 	return c.do(http.MethodPost, "/shutdown", struct{}{}, nil)
 }

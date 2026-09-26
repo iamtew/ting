@@ -71,6 +71,35 @@ func (g *Gateway) Events() <-chan Event { return g.events }
 
 func (g *Gateway) Addr() string { return g.cfg.Addr() }
 
+func (g *Gateway) SetChannels(chs []string) (join, part []string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	old := map[string]bool{}
+	for _, c := range g.cfg.Channels {
+		old[c] = true
+	}
+	neu := map[string]bool{}
+	for _, c := range chs {
+		neu[c] = true
+		if !old[c] {
+			join = append(join, c)
+		}
+	}
+	for _, c := range g.cfg.Channels {
+		if !neu[c] {
+			part = append(part, c)
+		}
+	}
+	g.cfg.Channels = append([]string(nil), chs...)
+	return join, part
+}
+
+func (g *Gateway) autojoin() []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return append([]string(nil), g.cfg.Channels...)
+}
+
 func (g *Gateway) Send(line string) {
 	select {
 	case g.out <- line:
@@ -276,7 +305,7 @@ func (g *Gateway) handle(msg Message) error {
 		if p := g.cfg.NickServPassword; p != "" {
 			g.Privmsg("NickServ", "IDENTIFY "+p)
 		}
-		for _, ch := range g.cfg.Channels {
+		for _, ch := range g.autojoin() {
 			g.Send("JOIN " + ch)
 		}
 	case "433": // nick in use

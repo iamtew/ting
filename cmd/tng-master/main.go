@@ -62,7 +62,6 @@ func run() int {
 	m.Boot(ctx)
 	go func() {
 		<-ctx.Done()
-		m.ShutdownChildren()
 		ln.Close()
 	}()
 	logger.Printf("admin http://%s db %s connector %s", cfg.Admin.Listen, cfg.Database, bin)

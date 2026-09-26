@@ -130,3 +130,11 @@ func TestSessionErrorReconnect(t *testing.T) {
 		t.Fatal("no reconnect after ERROR")
 	}
 }
+
+func TestSetChannelsDiff(t *testing.T) {
+	g := New(Spec{Channels: []string{"#a", "#b"}}, log.New(io.Discard, "", 0))
+	join, part := g.SetChannels([]string{"#b", "#c"})
+	if len(join) != 1 || join[0] != "#c" || len(part) != 1 || part[0] != "#a" {
+		t.Fatalf("join %v part %v", join, part)
+	}
+}
