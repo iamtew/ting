@@ -11,14 +11,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iamtew/tng/internal/acl"
-	"github.com/iamtew/tng/internal/config"
-	"github.com/iamtew/tng/internal/control"
-	"github.com/iamtew/tng/internal/gateway"
-	"github.com/iamtew/tng/internal/store"
+	"github.com/iamtew/ting/internal/acl"
+	"github.com/iamtew/ting/internal/config"
+	"github.com/iamtew/ting/internal/control"
+	"github.com/iamtew/ting/internal/gateway"
+	"github.com/iamtew/ting/internal/store"
 )
 
-const cookieName = "tng"
+const cookieName = "ting"
 const logCap = 200
 
 type logEvent struct {

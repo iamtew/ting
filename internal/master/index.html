@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tng</title>
+<title>TiNG</title>
 <link rel="stylesheet" href="/static/css/fontawesome.min.css">
 <link rel="stylesheet" href="/static/css/solid.min.css">
 <link rel="stylesheet" href="/static/css/regular.min.css">
@@ -13,7 +13,7 @@
 <body>
 <header>
   <img class="mark" src="/static/img/dummy.png" alt="">
-  <h1>tng</h1>
+  <h1>TiNG</h1>
   <nav class="tabs">
     <button type="button" data-tab="live">live</button>
     <button type="button" data-tab="server">server</button>
@@ -208,7 +208,7 @@ bind('part', fd => api('/api/part', {server_id: sid, channel: fd.get('channel')}
 bind('say', fd => api('/api/privmsg', {server_id: sid, target: fd.get('target'), text: fd.get('text')}));
 bind('nick', fd => api('/api/nick', {server_id: sid, nick: fd.get('nick')}));
 bind('raw', fd => api('/api/raw', {server_id: sid, line: fd.get('line')}));
-bind('quit', () => api('/api/quit', {server_id: sid, reason: 'tng'}));
+bind('quit', () => api('/api/quit', {server_id: sid, reason: 'ting'}));
 bind('startf', () => api('/api/servers/' + sid + '/start', {}));
 bind('cyclef', () => api('/api/servers/' + sid + '/cycle', {}));
 bind('stopf', () => api('/api/servers/' + sid + '/stop', {}));

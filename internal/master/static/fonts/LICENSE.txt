@@ -1,4 +1,4 @@
-These files are not MIT. The tng repo license does not cover them.
+These files are not MIT. The ting repo license does not cover them.
 
 BetterVCR.ttf
   Family: Better VCR-JP (name table version 25.09)

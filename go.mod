@@ -1,4 +1,4 @@
-module github.com/iamtew/tng
+module github.com/iamtew/ting
 
 go 1.25.0
 

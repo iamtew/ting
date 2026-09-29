@@ -1,14 +1,14 @@
 # Copy to config.toml (gitignored) and edit before connecting.
-# tng-master -config config.toml
-# IRC servers, channels, owners, and SASL live in tng.db (admin UI).
+# ting-master -config config.toml
+# IRC servers, channels, owners, and SASL live in ting.db (admin UI).
 
-database = "tng.db"
-# connector = "dist/dev/tng-connector"
+database = "ting.db"
+# connector = "dist/dev/ting-connector"
 
 [identity]
-nick = "tng"
-user = "tng"
-realname = "tng"
+nick = "ting"
+user = "ting"
+realname = "ting"
 
 # Admin UI login. Required.
 [control]

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iamtew/tng/internal/config"
+	"github.com/iamtew/ting/internal/config"
 )
 
 func TestSessionJoin(t *testing.T) {
@@ -41,11 +41,11 @@ func TestSessionJoin(t *testing.T) {
 				return
 			}
 			if strings.HasPrefix(line, "NICK ") {
-				io.WriteString(c, ":irc 001 tng :welcome\r\n")
+				io.WriteString(c, ":irc 001 ting :welcome\r\n")
 			}
 			if strings.HasPrefix(line, "JOIN ") {
 				sawJoin = true
-				io.WriteString(c, ":tng!~t@h JOIN :#tng\r\n")
+				io.WriteString(c, ":ting!~t@h JOIN :#ting\r\n")
 				done <- "ok"
 				return
 			}
@@ -54,9 +54,9 @@ func TestSessionJoin(t *testing.T) {
 	}()
 
 	cfg := Spec{
-		Channels: []string{"#tng"},
+		Channels: []string{"#ting"},
 		Server:   config.Server{Host: "127.0.0.1", Port: addr.Port, TLS: false},
-		Identity: config.Identity{Nick: "tng", User: "tng", Realname: "tng"},
+		Identity: config.Identity{Nick: "ting", User: "ting", Realname: "ting"},
 	}
 	g := New(cfg, log.New(io.Discard, "", 0))
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -100,7 +100,7 @@ func TestSessionErrorReconnect(t *testing.T) {
 						return
 					}
 					if strings.HasPrefix(line, "NICK ") {
-						io.WriteString(c, ":irc 001 tng :welcome\r\n")
+						io.WriteString(c, ":irc 001 ting :welcome\r\n")
 						if i == 1 {
 							io.WriteString(c, "ERROR :goodbye\r\n")
 						}
@@ -112,7 +112,7 @@ func TestSessionErrorReconnect(t *testing.T) {
 
 	g := New(Spec{
 		Server:   config.Server{Host: "127.0.0.1", Port: addr.Port, TLS: false},
-		Identity: config.Identity{Nick: "tng", User: "tng", Realname: "tng"},
+		Identity: config.Identity{Nick: "ting", User: "ting", Realname: "ting"},
 	}, log.New(io.Discard, "", 0))
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()

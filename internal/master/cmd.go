@@ -3,7 +3,7 @@ package master
 import (
 	"strings"
 
-	"github.com/iamtew/tng/internal/control"
+	"github.com/iamtew/ting/internal/control"
 )
 
 type Act struct {

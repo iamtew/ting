@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/iamtew/tng/internal/control"
-	"github.com/iamtew/tng/internal/store"
+	"github.com/iamtew/ting/internal/control"
+	"github.com/iamtew/ting/internal/store"
 )
 
 type proc struct {
@@ -116,7 +116,7 @@ func (m *Master) StartServer(ctx context.Context, id int64) error {
 		return err
 	}
 	spec := store.Spec(m.cfg.Identity, b)
-	specPath := filepath.Join(os.TempDir(), fmt.Sprintf("tng-spec-%d.json", id))
+	specPath := filepath.Join(os.TempDir(), fmt.Sprintf("ting-spec-%d.json", id))
 	raw, err := json.Marshal(spec)
 	if err != nil {
 		return err

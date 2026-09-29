@@ -1,4 +1,4 @@
-# tng
+# TiNG
 
 Go IRC platform. Gateway owns the sockets. Everything else consumes events.
 
@@ -46,7 +46,7 @@ independently without impacting the IRC connection.
 IRC -- connector (gateway) -- HTTP localhost control -- master (admin UI + commands + SQLite)
 ```
 
-Gateway owns the socket (one process per IRC server). Master owns the admin UI, SQLite (`tng.db`: servers, channels, owners/admins), and spawns connectors. IPC is stdlib HTTP on loopback (not NATS). Global nick/user/realname stay in TOML `[identity]`; per-server override in the DB.
+Gateway owns the socket (one process per IRC server). Master owns the admin UI, SQLite (`ting.db`: servers, channels, owners/admins), and spawns connectors. IPC is stdlib HTTP on loopback (not NATS). Global nick/user/realname stay in TOML `[identity]`; per-server override in the DB.
 
 Gateway: connect, TLS, SASL PLAIN, NickServ, join/part, reconnect, outbound queue, channel/user maps.
 

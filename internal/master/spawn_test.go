@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iamtew/tng/internal/config"
-	"github.com/iamtew/tng/internal/control"
-	"github.com/iamtew/tng/internal/store"
+	"github.com/iamtew/ting/internal/config"
+	"github.com/iamtew/ting/internal/control"
+	"github.com/iamtew/ting/internal/store"
 )
 
 func TestAdoptSkipsExec(t *testing.T) {
@@ -23,13 +23,13 @@ func TestAdoptSkipsExec(t *testing.T) {
 			http.Error(w, "no", http.StatusUnauthorized)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(control.Status{Connected: true, Nick: "tng"})
+		_ = json.NewEncoder(w).Encode(control.Status{Connected: true, Nick: "ting"})
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	host := strings.TrimPrefix(srv.URL, "http://")
 
-	db, err := store.Open(filepath.Join(t.TempDir(), "tng.db"))
+	db, err := store.Open(filepath.Join(t.TempDir(), "ting.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

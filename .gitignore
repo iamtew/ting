@@ -7,9 +7,9 @@
 .env.*
 !.env.example
 config.toml
-tng.db
-tng.db-wal
-tng.db-shm
+ting.db
+ting.db-wal
+ting.db-shm
 
 # OS / editor
 .DS_Store

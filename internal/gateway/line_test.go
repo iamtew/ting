@@ -3,18 +3,18 @@ package gateway
 import (
 	"testing"
 
-	"github.com/iamtew/tng/internal/config"
+	"github.com/iamtew/ting/internal/config"
 )
 
 func testCfg() Spec {
 	return Spec{
-		Identity: config.Identity{Nick: "tng", User: "tng", Realname: "tng"},
+		Identity: config.Identity{Nick: "ting", User: "ting", Realname: "ting"},
 		Server:   config.Server{Host: "127.0.0.1", Port: 1},
 	}
 }
 
 func TestParse(t *testing.T) {
-	m := Parse(":nick!~u@host PRIVMSG #tng :hello there")
+	m := Parse(":nick!~u@host PRIVMSG #ting :hello there")
 	if m.Nick != "nick" || m.User != "~u" || m.Host != "host" {
 		t.Fatalf("prefix: %+v", m)
 	}
@@ -45,22 +45,22 @@ func TestSASLPlain(t *testing.T) {
 
 func TestMaps(t *testing.T) {
 	g := New(testCfg(), nil)
-	_ = g.handle(Parse(":tng!~t@h JOIN :#tng"))
-	_ = g.handle(Parse(":irc 353 tng = #tng :@tng +alice bob"))
-	nicks := g.ChannelNicks("#TNG")
+	_ = g.handle(Parse(":ting!~t@h JOIN :#ting"))
+	_ = g.handle(Parse(":irc 353 ting = #ting :@ting +alice bob"))
+	nicks := g.ChannelNicks("#TING")
 	if len(nicks) != 3 {
 		t.Fatalf("nicks %v", nicks)
 	}
 	_ = g.handle(Parse(":bob!~b@h QUIT :bye"))
-	if len(g.ChannelNicks("#tng")) != 2 {
-		t.Fatalf("after quit %v", g.ChannelNicks("#tng"))
+	if len(g.ChannelNicks("#ting")) != 2 {
+		t.Fatalf("after quit %v", g.ChannelNicks("#ting"))
 	}
 	_ = g.handle(Parse(":alice!~a@h NICK :ally"))
 	found := map[string]bool{}
-	for _, n := range g.ChannelNicks("#tng") {
+	for _, n := range g.ChannelNicks("#ting") {
 		found[n] = true
 	}
 	if !found["ally"] || found["alice"] {
-		t.Fatalf("nick change %v", g.ChannelNicks("#tng"))
+		t.Fatalf("nick change %v", g.ChannelNicks("#ting"))
 	}
 }

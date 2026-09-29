@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/iamtew/tng/internal/config"
-	"github.com/iamtew/tng/internal/gateway"
+	"github.com/iamtew/ting/internal/config"
+	"github.com/iamtew/ting/internal/gateway"
 
 	_ "modernc.org/sqlite"
 )

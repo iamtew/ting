@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iamtew/tng/internal/gateway"
+	"github.com/iamtew/ting/internal/gateway"
 )
 
 type Status struct {
@@ -199,7 +199,7 @@ func (s *Server) quit(w http.ResponseWriter, r *http.Request) {
 	if req.Reason != "" {
 		line += " :" + req.Reason
 	} else {
-		line += " :tng"
+		line += " :ting"
 	}
 	s.gw.Send(line)
 	w.WriteHeader(http.StatusNoContent)

@@ -4,18 +4,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/iamtew/tng/internal/config"
+	"github.com/iamtew/ting/internal/config"
 )
 
 func TestPutGetIdentityMergeImport(t *testing.T) {
-	d, err := Open(filepath.Join(t.TempDir(), "tng.db"))
+	d, err := Open(filepath.Join(t.TempDir(), "ting.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer d.Close()
 
 	b, err := d.Put(Bundle{
-		Host: "irc.example.net", TLS: true, Channels: []string{"#tng", " #tng "},
+		Host: "irc.example.net", TLS: true, Channels: []string{"#ting", " #ting "},
 		Owners: []string{"you!*@*"}, Nick: "bot",
 	})
 	if err != nil {
@@ -25,11 +25,11 @@ func TestPutGetIdentityMergeImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Host != "irc.example.net" || got.Port != 6697 || len(got.Channels) != 1 || got.Channels[0] != "#tng" {
+	if got.Host != "irc.example.net" || got.Port != 6697 || len(got.Channels) != 1 || got.Channels[0] != "#ting" {
 		t.Fatalf("%+v", got)
 	}
-	id := MergeIdentity(config.Identity{Nick: "tng", User: "tng", Realname: "tng"}, got.Nick, got.User, got.Realname)
-	if id.Nick != "bot" || id.User != "tng" {
+	id := MergeIdentity(config.Identity{Nick: "ting", User: "ting", Realname: "ting"}, got.Nick, got.User, got.Realname)
+	if id.Nick != "bot" || id.User != "ting" {
 		t.Fatalf("merge %+v", id)
 	}
 
@@ -56,7 +56,7 @@ func TestPutGetIdentityMergeImport(t *testing.T) {
 }
 
 func TestValidateSASLNeedsTLS(t *testing.T) {
-	b := Bundle{Host: "irc.example.net", Port: 6667, TLS: false, SASLEnabled: true, SASLMechanism: "PLAIN", SASLUser: "tng", SASLPassword: "x"}
+	b := Bundle{Host: "irc.example.net", Port: 6667, TLS: false, SASLEnabled: true, SASLMechanism: "PLAIN", SASLUser: "ting", SASLPassword: "x"}
 	if err := b.Validate(); err == nil {
 		t.Fatal("expected SASL without TLS to fail")
 	}
@@ -68,7 +68,7 @@ func TestValidateSASLNeedsTLS(t *testing.T) {
 }
 
 func TestSpecEqualIgnoresNameACL(t *testing.T) {
-	g := config.Identity{Nick: "tng", User: "tng", Realname: "tng"}
+	g := config.Identity{Nick: "ting", User: "ting", Realname: "ting"}
 	a := Bundle{Host: "irc.example.net", Port: 6697, TLS: true, Name: "a", Owners: []string{"x!*@*"}}
 	b := Bundle{Host: "irc.example.net", Port: 6697, TLS: true, Name: "b", Admins: []string{"y!*@*"}}
 	if !SpecEqual(g, a, b) {
@@ -93,7 +93,7 @@ func TestSpecEqualIgnoresNameACL(t *testing.T) {
 }
 
 func TestConnectorPersist(t *testing.T) {
-	d, err := Open(filepath.Join(t.TempDir(), "tng.db"))
+	d, err := Open(filepath.Join(t.TempDir(), "ting.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

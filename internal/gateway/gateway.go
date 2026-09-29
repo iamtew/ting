@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iamtew/tng/internal/config"
+	"github.com/iamtew/ting/internal/config"
 )
 
 type Spec struct {
@@ -196,7 +196,7 @@ func (g *Gateway) session(ctx context.Context) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			g.Send("QUIT :tng")
+			g.Send("QUIT :ting")
 			time.Sleep(200 * time.Millisecond)
 		case <-sess.Done():
 		}
@@ -222,7 +222,7 @@ func (g *Gateway) session(ctx context.Context) error {
 		if err != nil {
 			if isTimeout(err) && !idlePing {
 				idlePing = true
-				g.Send("PING :tng")
+				g.Send("PING :ting")
 				continue
 			}
 			return err

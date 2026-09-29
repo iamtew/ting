@@ -4,7 +4,7 @@ import "testing"
 
 func TestValidateNoServer(t *testing.T) {
 	c := Config{
-		Identity: Identity{Nick: "tng"},
+		Identity: Identity{Nick: "ting"},
 		Control:  Control{Token: "x"},
 	}
 	c.applyDefaults()

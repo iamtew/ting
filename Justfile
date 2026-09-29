@@ -1,19 +1,19 @@
-# tng — build → package (zip) → ship to Linux prod
+# ting — build → package (zip) → ship to Linux prod
 # Windows 10 (PowerShell) + Linux (bash). Packages the working tree (no commit/push).
 
 set dotenv-load := true
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 set shell := ["bash", "-cu"]
 
-name      := "tng"
+name      := "ting"
 dist_dir  := "dist"
 stage_dir := dist_dir / "stage"
 artifact  := dist_dir / (name + ".zip")
 
 # Prod target — set via env, `.env` (gitignored), or recipe args.
-prod_host := env_var_or_default("TNG_PROD_HOST", "")
-prod_path := env_var_or_default("TNG_PROD_PATH", "")
-prod_user := env_var_or_default("TNG_PROD_USER", "")
+prod_host := env_var_or_default("TING_PROD_HOST", "")
+prod_path := env_var_or_default("TING_PROD_PATH", "")
+prod_user := env_var_or_default("TING_PROD_USER", "")
 
 default:
     @just --list
@@ -33,10 +33,10 @@ build:
       --exclude='./.cursor' \
       . | tar -xf - -C "{{ stage_dir }}"
     echo "staged -> {{ stage_dir }}"
-    GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/tng-connector" ./cmd/tng-connector
-    echo "linux amd64 binary -> {{ stage_dir }}/tng-connector"
-    GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/tng-master" ./cmd/tng-master
-    echo "linux amd64 binary -> {{ stage_dir }}/tng-master"
+    GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/ting-connector" ./cmd/ting-connector
+    echo "linux amd64 binary -> {{ stage_dir }}/ting-connector"
+    GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/ting-master" ./cmd/ting-master
+    echo "linux amd64 binary -> {{ stage_dir }}/ting-master"
 
 [windows]
 build:
@@ -51,14 +51,14 @@ build:
     Write-Host "staged -> {{ stage_dir }}"
     $env:GOOS = "linux"
     $env:GOARCH = "amd64"
-    go build -o (Join-Path "{{ stage_dir }}" "tng-connector") ./cmd/tng-connector
-    Write-Host "linux amd64 binary -> {{ stage_dir }}/tng-connector"
+    go build -o (Join-Path "{{ stage_dir }}" "ting-connector") ./cmd/ting-connector
+    Write-Host "linux amd64 binary -> {{ stage_dir }}/ting-connector"
     $env:GOOS = "linux"
     $env:GOARCH = "amd64"
-    go build -o (Join-Path "{{ stage_dir }}" "tng-master") ./cmd/tng-master
-    Write-Host "linux amd64 binary -> {{ stage_dir }}/tng-master"
+    go build -o (Join-Path "{{ stage_dir }}" "ting-master") ./cmd/ting-master
+    Write-Host "linux amd64 binary -> {{ stage_dir }}/ting-master"
 
-# ── package: zip dist/stage → dist/tng.zip ─────────────────────────────
+# ── package: zip dist/stage → dist/ting.zip ─────────────────────────────
 
 [unix]
 package: build
@@ -83,7 +83,7 @@ ship host=prod_host path=prod_path user=prod_user: package
     #!/usr/bin/env bash
     set -euo pipefail
     if [[ -z "{{ host }}" || -z "{{ path }}" ]]; then
-      echo "error: set TNG_PROD_HOST and TNG_PROD_PATH (or pass host= path=)" >&2
+      echo "error: set TING_PROD_HOST and TING_PROD_PATH (or pass host= path=)" >&2
       exit 1
     fi
     target="{{ host }}"
@@ -97,7 +97,7 @@ ship host=prod_host path=prod_path user=prod_user: package
     #!powershell.exe
     $ErrorActionPreference = "Stop"
     if (-not "{{ host }}" -or -not "{{ path }}") {
-      Write-Error "set TNG_PROD_HOST and TNG_PROD_PATH (or pass host= path=)"
+      Write-Error "set TING_PROD_HOST and TING_PROD_PATH (or pass host= path=)"
       exit 1
     }
     $target = if ("{{ user }}") { "{{ user }}@{{ host }}" } else { "{{ host }}" }
@@ -116,8 +116,8 @@ run:
       exit 1
     fi
     mkdir -p dist/dev
-    go build -o dist/dev/tng-connector ./cmd/tng-connector
-    go run ./cmd/tng-master -config config.toml -connector dist/dev/tng-connector
+    go build -o dist/dev/ting-connector ./cmd/ting-connector
+    go run ./cmd/ting-master -config config.toml -connector dist/dev/ting-connector
 
 [windows]
 run:
@@ -128,8 +128,8 @@ run:
       exit 1
     }
     New-Item -ItemType Directory -Path "dist/dev" -Force | Out-Null
-    go build -o (Join-Path "dist/dev" "tng-connector.exe") ./cmd/tng-connector
-    go run ./cmd/tng-master -config config.toml -connector (Join-Path "dist/dev" "tng-connector.exe")
+    go build -o (Join-Path "dist/dev" "ting-connector.exe") ./cmd/ting-connector
+    go run ./cmd/ting-master -config config.toml -connector (Join-Path "dist/dev" "ting-connector.exe")
 
 # ── stop: leftover go run / binaries from `just run` ───────────────────
 
@@ -137,18 +137,18 @@ run:
 stop:
     #!/usr/bin/env bash
     set -euo pipefail
-    pkill -f 'go run ./cmd/tng-connector' 2>/dev/null || true
-    pkill -f 'go run ./cmd/tng-master' 2>/dev/null || true
-    pkill -x tng-connector 2>/dev/null || true
-    pkill -x tng-master 2>/dev/null || true
+    pkill -f 'go run ./cmd/ting-connector' 2>/dev/null || true
+    pkill -f 'go run ./cmd/ting-master' 2>/dev/null || true
+    pkill -x ting-connector 2>/dev/null || true
+    pkill -x ting-master 2>/dev/null || true
 
 [windows]
 stop:
     #!powershell.exe
     $ErrorActionPreference = "SilentlyContinue"
     Get-CimInstance Win32_Process | Where-Object {
-      $_.Name -match 'tng-connector|tng-master' -or
-      $_.CommandLine -match 'cmd/tng-connector|cmd/tng-master'
+      $_.Name -match 'ting-connector|ting-master' -or
+      $_.CommandLine -match 'cmd/ting-connector|cmd/ting-master'
     } | ForEach-Object {
       Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     }

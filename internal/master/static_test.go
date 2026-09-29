@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/iamtew/tng/internal/config"
+	"github.com/iamtew/ting/internal/config"
 )
 
 func TestStaticPublic(t *testing.T) {

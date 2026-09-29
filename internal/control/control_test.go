@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iamtew/tng/internal/config"
-	"github.com/iamtew/tng/internal/gateway"
+	"github.com/iamtew/ting/internal/config"
+	"github.com/iamtew/ting/internal/gateway"
 )
 
 func TestAPIJoinPrivmsgStatus(t *testing.T) {
@@ -41,14 +41,14 @@ func TestAPIJoinPrivmsgStatus(t *testing.T) {
 			}
 			got <- strings.TrimRight(line, "\r\n")
 			if strings.HasPrefix(line, "NICK ") {
-				io.WriteString(c, ":irc 001 tng :welcome\r\n")
+				io.WriteString(c, ":irc 001 ting :welcome\r\n")
 			}
 		}
 	}()
 
 	cfg := gateway.Spec{
 		Server:   config.Server{Host: "127.0.0.1", Port: addr.Port, TLS: false},
-		Identity: config.Identity{Nick: "tng", User: "tng", Realname: "tng"},
+		Identity: config.Identity{Nick: "ting", User: "ting", Realname: "ting"},
 	}
 	g := gateway.New(cfg, log.New(io.Discard, "", 0))
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
@@ -65,7 +65,7 @@ func TestAPIJoinPrivmsgStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !st.Connected || st.Nick != "tng" {
+	if !st.Connected || st.Nick != "ting" {
 		t.Fatalf("status %+v", st)
 	}
 
@@ -117,8 +117,8 @@ func waitConnected(t *testing.T, g *gateway.Gateway) {
 }
 
 func TestStatusJSON(t *testing.T) {
-	b, err := json.Marshal(Status{Nick: "tng", Connected: true, Channels: map[string][]string{}})
-	if err != nil || !strings.Contains(string(b), "tng") {
+	b, err := json.Marshal(Status{Nick: "ting", Connected: true, Channels: map[string][]string{}})
+	if err != nil || !strings.Contains(string(b), "ting") {
 		t.Fatal(err, string(b))
 	}
 }

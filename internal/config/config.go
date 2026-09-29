@@ -10,7 +10,7 @@ import (
 )
 
 const DefaultPath = "config.toml"
-const DefaultDatabase = "tng.db"
+const DefaultDatabase = "ting.db"
 
 type Config struct {
 	Database  string `toml:"database"`
