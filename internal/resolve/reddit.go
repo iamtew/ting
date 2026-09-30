@@ -39,9 +39,19 @@ type Reddit struct {
 	ua     string
 }
 
-// Match detects reddit.com / redd.it submission URLs with a post id.
+// Match detects reddit.com / redd.it / Redlib-style submission URLs with a post id.
 func (r *Reddit) Match(u *url.URL) bool {
 	return redditPostID(u) != ""
+}
+
+// isRedditFrontend is reddit.com, redd.it, or a known privacy frontend host.
+// Do not treat arbitrary /r/…/comments/ paths as Reddit — oEmbed would hit a real post.
+func isRedditFrontend(host string) bool {
+	h := strings.ToLower(host)
+	if redditHost.MatchString(h) || redditShortHost.MatchString(h) {
+		return true
+	}
+	return strings.Contains(h, "redlib") || strings.Contains(h, "libreddit") || strings.Contains(h, "teddit")
 }
 
 func redditPostID(u *url.URL) string {
@@ -56,7 +66,7 @@ func redditPostID(u *url.URL) string {
 		}
 		return ""
 	}
-	if !redditHost.MatchString(host) {
+	if !isRedditFrontend(host) {
 		return ""
 	}
 	m := redditCommentsPath.FindStringSubmatch(u.Path)
@@ -64,6 +74,18 @@ func redditPostID(u *url.URL) string {
 		return strings.ToLower(m[1])
 	}
 	return ""
+}
+
+// redditCanonicalURL is the www.reddit.com form oEmbed accepts (frontends/short links do not).
+func redditCanonicalURL(u *url.URL) string {
+	id := redditPostID(u)
+	if id == "" {
+		return u.String()
+	}
+	if sub := redditSubredditFromURL(u); sub != "" {
+		return "https://www.reddit.com/r/" + sub + "/comments/" + id + "/"
+	}
+	return "https://www.reddit.com/comments/" + id + "/"
 }
 
 func redditSubredditFromURL(u *url.URL) string {
@@ -166,22 +188,7 @@ func (r *Reddit) fromArctic(ctx context.Context, id string, src *url.URL) (strin
 }
 
 func (r *Reddit) fromOEmbed(ctx context.Context, u *url.URL) (string, bool, error) {
-	// Canonicalise to www.reddit.com for oEmbed; short/old hosts still work when
-	// passed as-is, but a stable https URL avoids odd redirects.
-	embedURL := u.String()
-	if redditShortHost.MatchString(u.Hostname()) {
-		id := redditPostID(u)
-		if id != "" {
-			embedURL = "https://www.reddit.com/comments/" + id + "/"
-		}
-	} else if host := strings.ToLower(u.Hostname()); strings.HasSuffix(host, "reddit.com") {
-		nu := *u
-		nu.Scheme = "https"
-		nu.Host = "www.reddit.com"
-		embedURL = nu.String()
-	}
-
-	apiURL := redditOEmbedURL + "?url=" + url.QueryEscape(embedURL)
+	apiURL := redditOEmbedURL + "?url=" + url.QueryEscape(redditCanonicalURL(u))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return "", false, err

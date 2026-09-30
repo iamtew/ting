@@ -115,6 +115,59 @@ func TestURLTitleConsentBothSkip(t *testing.T) {
 	}
 }
 
+func TestURLTitleOGOnly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "text/html" {
+			t.Errorf("Accept=%q", r.Header.Get("Accept"))
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><meta property="og:title" content="CIA accused of using Ancestry"></head></html>`))
+	}))
+	defer srv.Close()
+
+	u, _ := url.Parse(srv.URL)
+	r := &URLTitle{client: srv.Client(), ua: "t3b-test"}
+	reply, ok, err := r.Resolve(context.Background(), u)
+	if err != nil || !ok || !strings.Contains(reply, "CIA accused of using Ancestry") {
+		t.Fatalf("reply=%q ok=%v err=%v", reply, ok, err)
+	}
+}
+
+func TestURLTitle403ThenPreview(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if strings.Contains(r.Header.Get("User-Agent"), "facebookexternalhit") {
+			_, _ = w.Write([]byte(`<html><head><title>Real Article Title</title></head></html>`))
+			return
+		}
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`<html><head><title>Blocked</title></head></html>`))
+	}))
+	defer srv.Close()
+
+	u, _ := url.Parse(srv.URL)
+	r := &URLTitle{client: srv.Client(), ua: "t3b-test"}
+	reply, ok, err := r.Resolve(context.Background(), u)
+	if err != nil || !ok || !strings.Contains(reply, "Real Article Title") {
+		t.Fatalf("reply=%q ok=%v err=%v", reply, ok, err)
+	}
+}
+
+func TestURLTitleArchiveJunkSkip(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>archive.ph</title></head></html>`))
+	}))
+	defer srv.Close()
+
+	u, _ := url.Parse(srv.URL)
+	r := &URLTitle{client: srv.Client(), ua: "t3b-test"}
+	reply, ok, err := r.Resolve(context.Background(), u)
+	if err != nil || ok || reply != "" {
+		t.Fatalf("expected skip, got reply=%q ok=%v err=%v", reply, ok, err)
+	}
+}
+
 func TestTwitterMatch(t *testing.T) {
 	tr := &Twitter{}
 	u, _ := url.Parse("https://x.com/someone/status/1234567890")
@@ -388,6 +441,9 @@ func TestRedditMatch(t *testing.T) {
 		{"https://redd.it/1w6ozxy", true},
 		{"https://www.reddit.com/r/IntelArc/", false},
 		{"https://example.com/r/foo/comments/1w6ozxy/", false},
+		{"https://redlib.catsarch.com/r/LocalLLaMA/comments/1wsc0iz/guys_i_promise_it_wasnt_me/", true},
+		{"https://libreddit.example.net/r/foo/comments/1w6ozxy/", true},
+		{"https://teddit.net/r/foo/comments/abc123/", true},
 		{"https://www.reddit.com/user/someone/", false},
 	}
 	for _, tc := range cases {
@@ -543,5 +599,65 @@ func TestRedditBeatsURLTitle(t *testing.T) {
 	}
 	if strings.Contains(reply, "Title: Reddit") {
 		t.Fatalf("URLTitle should not win: %q", reply)
+	}
+}
+
+func TestRedditArcticRedlib(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/api/posts/ids") {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("ids") != "1wsc0iz" {
+			t.Errorf("ids=%q", r.URL.Query().Get("ids"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(arcticPostJSON))
+	}))
+	defer srv.Close()
+
+	rd := &Reddit{
+		ua:     "t3b-test",
+		client: &http.Client{Transport: rewriteToTestServer(srv)},
+	}
+	u, _ := url.Parse("https://redlib.catsarch.com/r/LocalLLaMA/comments/1wsc0iz/guys_i_promise_it_wasnt_me/")
+	reply, ok, err := rd.Resolve(context.Background(), u)
+	if err != nil || !ok || !strings.Contains(reply, "Reddit:") || !strings.Contains(reply, "148 score") {
+		t.Fatalf("ok=%v err=%v reply=%q", ok, err, reply)
+	}
+}
+
+func TestRedditOEmbedCanonicalizesRedlib(t *testing.T) {
+	var embed string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/api/posts/ids"):
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		case strings.Contains(r.URL.Path, "/oembed"):
+			embed = r.URL.Query().Get("url")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(redditOEmbedJSON))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	rd := &Reddit{
+		ua:     "t3b-test",
+		client: &http.Client{Transport: rewriteToTestServer(srv)},
+	}
+	u, _ := url.Parse("https://redlib.catsarch.com/r/LocalLLaMA/comments/1wsc0iz/slug/")
+	reply, ok, err := rd.Resolve(context.Background(), u)
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v reply=%q", ok, err, reply)
+	}
+	want := "https://www.reddit.com/r/LocalLLaMA/comments/1wsc0iz/"
+	if embed != want {
+		t.Fatalf("oembed url=%q want %q", embed, want)
+	}
+	if strings.Contains(embed, "redlib") {
+		t.Fatalf("oembed still pointed at frontend: %q", embed)
 	}
 }
