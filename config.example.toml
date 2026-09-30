@@ -15,7 +15,7 @@ realname = "ting"
 token = "change-me"
 
 [admin]
-listen = "127.0.0.1:8080"
+listen = "127.0.0.1:42069"
 
 # OpenRouter chat. Empty api_key = off.
 # model is used only until the admin catalog is saved.

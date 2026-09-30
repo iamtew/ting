@@ -98,7 +98,7 @@ func (c *Config) applyDefaults() {
 		c.SASL.Mechanism = "PLAIN"
 	}
 	if strings.TrimSpace(c.Admin.Listen) == "" {
-		c.Admin.Listen = "127.0.0.1:8080"
+		c.Admin.Listen = "127.0.0.1:42069"
 	}
 	if strings.TrimSpace(c.Database) == "" {
 		c.Database = DefaultDatabase
