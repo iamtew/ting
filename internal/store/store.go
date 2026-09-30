@@ -138,7 +138,13 @@ CREATE TABLE IF NOT EXISTS links (
   title TEXT NOT NULL,
   UNIQUE(server_id, datetime, url)
 );
-CREATE INDEX IF NOT EXISTS links_server_dt ON links(server_id, datetime);`)
+CREATE INDEX IF NOT EXISTS links_server_dt ON links(server_id, datetime);
+CREATE TABLE IF NOT EXISTS karma (
+  server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  phrase TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (server_id, phrase)
+);`)
 	return err
 }
 

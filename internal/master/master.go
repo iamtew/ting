@@ -1,12 +1,14 @@
 package master
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -127,17 +129,27 @@ func (m *Master) onEvent(id int64, cl *control.Client, ev control.Event) {
 		dest = msg.Params[0]
 	}
 	text := msg.Last()
+	st, _ := cl.Status()
+	if msg.Nick != "" && msg.Nick == st.Nick {
+		return
+	}
 	if name, args, ok := ParseDot(text); ok {
+		if name == "karma" {
+			reply := dest
+			if !isChan(dest) {
+				reply = msg.Nick
+			}
+			if err := cl.Privmsg(reply, karmaLookup(m.db, id, args)); err != nil {
+				m.log.Printf("karma: %v", err)
+			}
+			return
+		}
 		b, err := m.db.Get(id)
 		if err != nil {
 			return
 		}
 		role := acl.Role(b.Owners, b.Admins, msg.Nick, msg.User, msg.Host)
 		if role == "" {
-			return
-		}
-		st, _ := cl.Status()
-		if msg.Nick != "" && msg.Nick == st.Nick {
 			return
 		}
 		for _, a := range Dispatch(role, dest, msg.Nick, name, args, st) {
@@ -150,8 +162,17 @@ func (m *Master) onEvent(id int64, cl *control.Client, ev control.Event) {
 	if !isChan(dest) {
 		return
 	}
-	st, _ := cl.Status()
-	if msg.Nick != "" && msg.Nick == st.Nick {
+	lines, handled, err := karmaBumpReplies(m.db, id, st.Nick, msg.Nick, text)
+	if err != nil {
+		m.log.Printf("karma: %v", err)
+		return
+	}
+	if handled {
+		for _, line := range lines {
+			if err := cl.Privmsg(dest, line); err != nil {
+				m.log.Printf("karma: %v", err)
+			}
+		}
 		return
 	}
 	b, err := m.db.Get(id)
@@ -629,7 +650,32 @@ func (m *Master) apiImportLinks(w http.ResponseWriter, r *http.Request) {
 		defer f.Close()
 		body = f
 	}
-	links, skipped, err := store.ParseT3BLinks(body)
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if store.IsSQLite(raw) {
+		path, err := store.WriteTempSQLite(raw)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer os.Remove(path)
+		rows, err := store.ReadT3BKarma(path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		st, err := m.db.ImportKarma(id, rows)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, st)
+		return
+	}
+	links, skipped, err := store.ParseT3BLinks(bytes.NewReader(raw))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

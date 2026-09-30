@@ -125,10 +125,10 @@
 <button type="button" id="linkmore" hidden>more</button>
 </section>
 <section id="tab-import" hidden>
-<p class="hint">Drop t3b <code>links-nick-host.log</code> JSONL onto the selected server. Re-drop is safe (duplicates skipped). Browse them on the links tab.</p>
+<p class="hint">Drop t3b <code>links-nick-host.log</code> JSONL or <code>karma-nick-host.db</code> onto the selected server. Re-drop is safe (link dups skipped; karma scores replaced). Browse links on the links tab.</p>
 <div id="drop" class="drop" tabindex="0">
-  <p><i class="fa-solid fa-file-import"></i> drop t3b link logs here, or click to pick</p>
-  <input id="impfile" type="file" multiple accept=".log,.jsonl,.json,text/plain">
+  <p><i class="fa-solid fa-file-import"></i> drop t3b link logs or karma db here, or click to pick</p>
+  <input id="impfile" type="file" multiple accept=".log,.jsonl,.json,.db,.sqlite,text/plain,application/octet-stream">
 </div>
 <p id="impst" class="hint"></p>
 </section>
