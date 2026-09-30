@@ -11,7 +11,7 @@ Develop on Windows 10, package a zip locally. No commit/push required to package
 
 Also needed:
 
-- **Linux:** `zip`, `tar`
+- **Linux:** `zip`
 - **Windows:** PowerShell 5+ (built-in)
 
 ## Recipes
@@ -19,7 +19,7 @@ Also needed:
 ```text
 just run       # build connector + start master (needs config.toml)
 just stop      # kill leftover connector/master from `just run`
-just build     # stage working tree + linux amd64 binaries → dist/stage
+just build     # linux amd64 binaries + config.example.toml → dist/stage
 just package   # zip → dist/ting.zip (runs build)
 just clean     # wipe dist/
 ```
@@ -43,7 +43,7 @@ Debug a connector alone: `ting-connector -listen 127.0.0.1:7391 -token x -spec s
 
 ## Notes
 
-- Packaging copies the **working tree** (excludes `.git`, `dist/`, `.env`, `.cursor`). Uncommitted local files are included.
+- Zip is runtime only: `ting-master`, `ting-connector`, `config.example.toml`. HTML/static are embedded in the master binary.
 - Justfile uses `[unix]` (bash) and `[windows]` (PowerShell) recipe variants; same recipe names on both.
-- Linux stages with `tar`, zips with `zip`. Windows copies with PowerShell, zips with `Compress-Archive`.
-- `just build` copies the working tree, then `GOOS=linux GOARCH=amd64 go build` into `dist/stage/ting-connector` and `dist/stage/ting-master` (prod is Linux). Local Windows runs use `just run`.
+- Linux zips with `zip`. Windows zips with `Compress-Archive`.
+- `just build` writes linux amd64 binaries into `dist/stage` (prod is Linux). Local Windows runs use `just run`.

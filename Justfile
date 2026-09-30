@@ -1,5 +1,5 @@
 # ting — build → package (zip)
-# Windows 10 (PowerShell) + Linux (bash). Packages the working tree (no commit/push).
+# Windows 10 (PowerShell) + Linux (bash). Runtime files only (no commit/push).
 
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 set shell := ["bash", "-cu"]
@@ -12,7 +12,7 @@ artifact  := dist_dir / (name + ".zip")
 default:
     @just --list
 
-# ── build: stage working tree → dist/stage ─────────────────────────────
+# ── build: linux binaries + config.example.toml → dist/stage ───────────
 
 [unix]
 build:
@@ -20,17 +20,12 @@ build:
     set -euo pipefail
     rm -rf "{{ stage_dir }}"
     mkdir -p "{{ stage_dir }}"
-    tar -cf - \
-      --exclude='./.git' \
-      --exclude='./dist' \
-      --exclude='./.env' \
-      --exclude='./.cursor' \
-      . | tar -xf - -C "{{ stage_dir }}"
-    echo "staged -> {{ stage_dir }}"
     GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/ting-connector" ./cmd/ting-connector
     echo "linux amd64 binary -> {{ stage_dir }}/ting-connector"
     GOOS=linux GOARCH=amd64 go build -o "{{ stage_dir }}/ting-master" ./cmd/ting-master
     echo "linux amd64 binary -> {{ stage_dir }}/ting-master"
+    cp config.example.toml "{{ stage_dir }}/config.example.toml"
+    echo "staged -> {{ stage_dir }}"
 
 [windows]
 build:
@@ -38,11 +33,6 @@ build:
     $ErrorActionPreference = "Stop"
     if (Test-Path "{{ stage_dir }}") { Remove-Item -Recurse -Force "{{ stage_dir }}" }
     New-Item -ItemType Directory -Path "{{ stage_dir }}" -Force | Out-Null
-    $skip = @('.git', 'dist', '.env', '.cursor')
-    Get-ChildItem -Force | Where-Object { $skip -notcontains $_.Name } | ForEach-Object {
-      Copy-Item -Recurse -Force $_.FullName -Destination (Join-Path "{{ stage_dir }}" $_.Name)
-    }
-    Write-Host "staged -> {{ stage_dir }}"
     $env:GOOS = "linux"
     $env:GOARCH = "amd64"
     go build -o (Join-Path "{{ stage_dir }}" "ting-connector") ./cmd/ting-connector
@@ -51,6 +41,8 @@ build:
     $env:GOARCH = "amd64"
     go build -o (Join-Path "{{ stage_dir }}" "ting-master") ./cmd/ting-master
     Write-Host "linux amd64 binary -> {{ stage_dir }}/ting-master"
+    Copy-Item config.example.toml (Join-Path "{{ stage_dir }}" "config.example.toml")
+    Write-Host "staged -> {{ stage_dir }}"
 
 # ── package: zip dist/stage → dist/ting.zip ─────────────────────────────
 
