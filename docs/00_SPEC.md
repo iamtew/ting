@@ -58,6 +58,8 @@ Connectivity: TLS, SASL PLAIN, nick/user/realname, autojoin (many channels), rec
 
 Auth: owner / admin / user via `nick!user@host` with wildcards.
 
+URL resolve (master, not the connector): first http(s) URL in a channel PRIVMSG. Modules, first match wins: Twitter/X, Bluesky, YouTube (Data API v3 when a key is set), Reddit, generic page title. Per-server enable/disable + YouTube key in the admin server tab (same knobs as t3b `[resolve]`). 6 titles per channel per minute. Resolved links persist in SQLite. Admin **links** tab: search and browse. **import** tab: drag-drop t3b `links-*.log` JSONL onto a server (duplicates skipped).
+
 Admin: `.join` `.leave` `.op` `.deop`
 
 Owner/admin: `.help` `.status` `.say`
@@ -68,7 +70,6 @@ Automode: if we have +o, keep owners/admins +o.
 
 ## Later (not now)
 
-- URL titles (generic, YouTube, X)
 - SQLite message/event log
 - AI: mention replies, `.summary`, optional memory
 - Discord etc. when v1 is boring
@@ -79,4 +80,4 @@ Automode: if we have +o, keep owners/admins +o.
 1. Gateway + join/recv/send/reconnect.
 2. Control HTTP + master admin UI + permissions + admin commands.
 3. SQLite servers + master-spawned connectors.
-4. Then links, then message log, then AI.
+4. Channel URL resolve (master). Then message log, then AI.

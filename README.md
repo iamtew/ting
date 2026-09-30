@@ -35,6 +35,8 @@ just run
 
 Opens admin UI at `http://127.0.0.1:8080` (token from `control.token`). Ctrl+C stops master only; connectors stay on IRC. `just stop` kills leftovers. Cycle in the admin UI restarts a connector on purpose.
 
+Channel URLs are resolved on master (Twitter/X, Bluesky, YouTube, Reddit, generic titles). Enable/disable per server on the server tab. The connector only keeps the IRC socket and forwards events. Import old t3b `links-*.log` files on the **import** tab (drop onto the selected server). Browse and search them on the **links** tab.
+
 Debug a connector alone: `ting-connector -listen 127.0.0.1:7391 -token x -spec spec.json`.
 
 ## Notes

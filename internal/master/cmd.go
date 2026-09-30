@@ -142,5 +142,12 @@ func modeArgs(dest string, args []string) (ch, nick string) {
 }
 
 func isChan(s string) bool {
-	return strings.HasPrefix(s, "#") || strings.HasPrefix(s, "&")
+	if s == "" {
+		return false
+	}
+	switch s[0] {
+	case '#', '&', '+', '!':
+		return true
+	}
+	return false
 }

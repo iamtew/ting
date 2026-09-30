@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/css/solid.min.css">
 <link rel="stylesheet" href="/static/css/regular.min.css">
 <link rel="stylesheet" href="/static/css/brands.min.css">
-<link rel="stylesheet" href="/static/css/admin.css?v=5">
+<link rel="stylesheet" href="/static/css/admin.css?v=8">
 </head>
 <body>
 <header>
@@ -19,6 +19,8 @@
     <button type="button" data-tab="server">server</button>
     <button type="button" data-tab="control">control</button>
     <button type="button" data-tab="log">log</button>
+    <button type="button" data-tab="links">links</button>
+    <button type="button" data-tab="import">import</button>
   </nav>
 </header>
 <div class="strip">
@@ -84,6 +86,18 @@
 <label class="field">owners <textarea name="owners" placeholder="nick!user@host"></textarea></label>
 <label class="field">admins <textarea name="admins" placeholder="nick!user@host"></textarea></label>
 </fieldset>
+<fieldset>
+<legend>resolve</legend>
+<p class="hint">channel URLs — master fetches, connector stays dumb</p>
+<label class="check"><input type="checkbox" name="url_titles" checked> url titles</label>
+<label class="check"><input type="checkbox" name="twitter" checked> twitter / x</label>
+<label class="check"><input type="checkbox" name="bluesky" checked> bluesky</label>
+<label class="check"><input type="checkbox" name="youtube" checked> youtube</label>
+<label class="check"><input type="checkbox" name="reddit" checked> reddit</label>
+<label class="field">youtube api key <input name="youtube_api_key" type="password" placeholder="Data API v3"></label>
+<label class="field">user agent <input name="user_agent" placeholder="optional"></label>
+<label class="field">http timeout <input name="http_timeout_sec" type="number" min="1" max="120" placeholder="8"></label>
+</fieldset>
 <div class="actions">
 <button type="submit"><i class="fa-solid fa-floppy-disk"></i> save</button>
 <button type="button" id="newbtn"><i class="fa-solid fa-file"></i> new</button>
@@ -101,6 +115,22 @@
 <section id="tab-log" hidden>
 <div class="logbar"><label class="check"><input type="checkbox" id="logsel" checked> this server</label></div>
 <div id="log"></div>
+</section>
+<section id="tab-links" hidden>
+<div class="logbar">
+  <input id="linkq" placeholder="search title, url, domain, channel, nick" autocomplete="off">
+  <span id="linkn" class="hint"></span>
+</div>
+<div id="linklist" class="implist"></div>
+<button type="button" id="linkmore" hidden>more</button>
+</section>
+<section id="tab-import" hidden>
+<p class="hint">Drop t3b <code>links-nick-host.log</code> JSONL onto the selected server. Re-drop is safe (duplicates skipped). Browse them on the links tab.</p>
+<div id="drop" class="drop" tabindex="0">
+  <p><i class="fa-solid fa-file-import"></i> drop t3b link logs here, or click to pick</p>
+  <input id="impfile" type="file" multiple accept=".log,.jsonl,.json,text/plain">
+</div>
+<p id="impst" class="hint"></p>
 </section>
 </div>
 <script>
@@ -170,7 +200,11 @@ function bundleFromForm(fd) {
     nickserv_password: fd.get('nickserv_password'),
     sasl_enabled: fd.get('sasl_enabled') === 'on', sasl_mechanism: 'PLAIN',
     sasl_user: fd.get('sasl_user'), sasl_password: fd.get('sasl_password'),
-    channels: lines(fd.get('channels')), owners: lines(fd.get('owners')), admins: lines(fd.get('admins'))
+    channels: lines(fd.get('channels')), owners: lines(fd.get('owners')), admins: lines(fd.get('admins')),
+    url_titles: fd.get('url_titles') === 'on', twitter: fd.get('twitter') === 'on',
+    bluesky: fd.get('bluesky') === 'on', youtube: fd.get('youtube') === 'on', reddit: fd.get('reddit') === 'on',
+    youtube_api_key: fd.get('youtube_api_key'), user_agent: fd.get('user_agent'),
+    http_timeout_sec: Number(fd.get('http_timeout_sec') || 0)
   };
 }
 function fillForm(s) {
@@ -190,6 +224,14 @@ function fillForm(s) {
   f.channels.value = (s.channels || []).join('\n');
   f.owners.value = (s.owners || []).join('\n');
   f.admins.value = (s.admins || []).join('\n');
+  f.url_titles.checked = s.url_titles !== false;
+  f.twitter.checked = s.twitter !== false;
+  f.bluesky.checked = s.bluesky !== false;
+  f.youtube.checked = s.youtube !== false;
+  f.reddit.checked = s.reddit !== false;
+  f.youtube_api_key.value = s.youtube_api_key || '';
+  f.user_agent.value = s.user_agent || '';
+  f.http_timeout_sec.value = s.http_timeout_sec || '';
 }
 function selected() { return servers.find(s => s.id === sid); }
 function chanList(s) {
@@ -403,6 +445,7 @@ document.getElementById('slist').onchange = () => {
   pick = true; primed = true; sid = id; fillForm(s);
   renderLive();
   renderLog();
+  browseLinks(false);
 };
 document.getElementById('newbtn').onclick = () => { pick = false; sid = 0; primed = true; fillForm({enabled: true, tls: true}); refresh(); };
 document.getElementById('delbtn').onclick = async () => {
@@ -442,7 +485,84 @@ bind('saylive', fd => {
 bind('startf', () => api('/api/servers/' + sid + '/start', {}));
 bind('cyclef', () => api('/api/servers/' + sid + '/cycle', {}));
 bind('stopf', () => api('/api/servers/' + sid + '/stop', {}));
-const tabs = ['live', 'server', 'control', 'log'];
+async function importFiles(files) {
+  const st = document.getElementById('impst');
+  if (!sid) { st.textContent = 'pick a server first'; return; }
+  if (!files || !files.length) return;
+  let imported = 0, dup = 0, skip = 0;
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append('file', f);
+    const r = await fetch('/api/servers/' + sid + '/import', {method: 'POST', body: fd});
+    if (r.status === 401) { location.href = '/login'; return; }
+    if (!r.ok) { st.textContent = f.name + ': ' + (await r.text()); return; }
+    const j = await r.json();
+    imported += j.imported || 0;
+    dup += j.duplicates || 0;
+    skip += j.skipped || 0;
+  }
+  st.textContent = 'imported ' + imported + ', duplicates ' + dup + ', skipped ' + skip;
+  browseLinks(false);
+}
+let linkOff = 0;
+const linkPage = 80;
+async function browseLinks(more) {
+  const el = document.getElementById('linklist');
+  const n = document.getElementById('linkn');
+  const moreb = document.getElementById('linkmore');
+  if (!el) return;
+  if (!sid) {
+    el.replaceChildren();
+    n.textContent = '';
+    moreb.hidden = true;
+    return;
+  }
+  if (!more) linkOff = 0;
+  const q = encodeURIComponent((document.getElementById('linkq').value || '').trim());
+  const r = await api('/api/links?server_id=' + sid + '&q=' + q + '&offset=' + linkOff + '&limit=' + linkPage);
+  if (!r || !r.ok) return;
+  const j = await r.json();
+  if (!more) el.replaceChildren();
+  for (const e of (j.links || [])) {
+    const d = document.createElement('div');
+    d.className = 'linkrow';
+    const tm = document.createElement('span'); tm.className = 'tm'; tm.textContent = (e.datetime || '').replace('T', ' ').slice(0, 16);
+    const ch = document.createElement('span'); ch.className = 'kd'; ch.textContent = e.channel || '';
+    const nk = document.createElement('span'); nk.className = 'nk'; nk.textContent = e.user || '';
+    const ln = document.createElement('span'); ln.className = 'ln';
+    const a = document.createElement('a');
+    a.href = e.URL || '';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = e.title || e.URL || '';
+    const dom = document.createElement('span');
+    dom.className = 'dom';
+    dom.textContent = e.domain || '';
+    ln.append(a, document.createTextNode(' '), dom);
+    d.append(tm, ch, nk, ln);
+    el.append(d);
+  }
+  linkOff += (j.links || []).length;
+  n.textContent = (j.total ? (linkOff + ' / ' + j.total) : '0');
+  moreb.hidden = linkOff >= (j.total || 0);
+}
+const drop = document.getElementById('drop');
+const inp = document.getElementById('impfile');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('on'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('on'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('on');
+  importFiles(e.dataTransfer.files);
+});
+inp.addEventListener('change', () => { importFiles(inp.files); inp.value = ''; });
+document.getElementById('linkmore').onclick = () => browseLinks(true);
+let linkT;
+document.getElementById('linkq').addEventListener('input', () => {
+  clearTimeout(linkT);
+  linkT = setTimeout(() => browseLinks(false), 150);
+});
+const tabs = ['live', 'server', 'control', 'log', 'links', 'import'];
 function showTab(name) {
   if (!tabs.includes(name)) name = 'live';
   for (const t of tabs) {
@@ -450,6 +570,7 @@ function showTab(name) {
     document.querySelector('[data-tab="' + t + '"]').classList.toggle('on', t === name);
   }
   if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+  if (name === 'links') browseLinks(false);
 }
 document.querySelector('.tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');

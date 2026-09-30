@@ -86,6 +86,12 @@ func TestSpecEqualIgnoresNameACL(t *testing.T) {
 	if !DialEqual(g, a, b) {
 		t.Fatal("channel-only must still dial-equal")
 	}
+	b.Channels = nil
+	off := false
+	b.Twitter = &off
+	if !SpecEqual(g, a, b) {
+		t.Fatal("resolve flags must not force restart")
+	}
 	b.Host = "other.net"
 	if DialEqual(g, a, b) {
 		t.Fatal("host change must not be dial-equal")
@@ -114,5 +120,34 @@ func TestConnectorPersist(t *testing.T) {
 	}
 	if _, err := d.Connector(b.ID); err == nil {
 		t.Fatal("want gone")
+	}
+}
+
+func TestResolveFlagsRoundTrip(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "ting.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	off := false
+	b, err := d.Put(Bundle{Host: "irc.example.net", TLS: true, Twitter: &off, YouTubeAPIKey: "k"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.Get(b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Twitter == nil || *got.Twitter {
+		t.Fatalf("twitter want off %+v", got.Twitter)
+	}
+	if got.URLTitles == nil || !*got.URLTitles {
+		t.Fatalf("url_titles want on %+v", got.URLTitles)
+	}
+	if got.YouTubeAPIKey != "k" {
+		t.Fatalf("key %q", got.YouTubeAPIKey)
+	}
+	if got.HTTPTimeoutSec != 8 {
+		t.Fatalf("timeout %d", got.HTTPTimeoutSec)
 	}
 }

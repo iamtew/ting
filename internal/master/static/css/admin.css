@@ -193,6 +193,7 @@ legend {
   color: var(--yell);
   padding: 0 .35rem;
 }
+p.hint { margin: 0; color: var(--dim); font-size: .8rem; }
 label.field {
   display: flex;
   flex-direction: column;
@@ -404,6 +405,56 @@ button.danger { background: var(--mute); color: var(--yell); }
 }
 .logrow .tm, .logrow .kd { color: var(--dim); }
 .logrow .ln { white-space: pre-wrap; word-break: break-word; }
+#tab-import { gap: .6rem; }
+#tab-links { gap: .5rem; }
+#linkq { flex: 1; min-width: 8rem; }
+.linkrow {
+  display: grid;
+  grid-template-columns: 8.6rem 5.5rem 5rem minmax(0, 1fr);
+  gap: .45rem;
+  margin: 0 0 .35rem;
+  align-items: baseline;
+}
+.linkrow .tm, .linkrow .kd, .linkrow .nk { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linkrow .ln { min-width: 0; }
+.linkrow a { color: var(--yell); text-decoration: none; word-break: break-word; }
+.linkrow a:hover { text-decoration: underline; }
+.linkrow .dom { color: var(--dim); font-size: .8rem; margin-left: .25rem; }
+#linkmore { align-self: flex-start; }
+.drop {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 7rem;
+  border: 2px dashed var(--line);
+  border-radius: var(--rad);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--dim);
+  padding: 1rem;
+}
+.drop.on { border-color: var(--yell); color: var(--yell); }
+.drop p { margin: 0; pointer-events: none; }
+.drop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.implist {
+  font-family: "DejaVu Sans Mono", ui-monospace, monospace;
+  background: var(--mute);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--rad);
+  padding: .6rem;
+  min-height: 0;
+  overflow: auto;
+  flex: 1;
+  font-size: .82rem;
+}
 body.login {
   align-items: center;
   justify-content: center;
@@ -450,4 +501,6 @@ body.login {
   .joinf button, .composer button { width: auto; }
   .logrow { grid-template-columns: 5.2rem minmax(0, 1fr); }
   .logrow .kd { display: none; }
+  .linkrow { grid-template-columns: 5.2rem minmax(0, 1fr); }
+  .linkrow .kd, .linkrow .nk { display: none; }
 }

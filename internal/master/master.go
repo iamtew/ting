@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/iamtew/ting/internal/config"
 	"github.com/iamtew/ting/internal/control"
 	"github.com/iamtew/ting/internal/gateway"
+	"github.com/iamtew/ting/internal/resolve"
 	"github.com/iamtew/ting/internal/store"
 )
 
@@ -35,10 +37,11 @@ type Master struct {
 	stop      func()
 	log       *log.Logger
 
-	mu    sync.Mutex
-	procs map[int64]*proc
-	tail  []logEvent
-	subs  map[chan logEvent]struct{}
+	mu      sync.Mutex
+	procs   map[int64]*proc
+	engines map[int64]*resolve.Engine
+	tail    []logEvent
+	subs    map[chan logEvent]struct{}
 }
 
 func New(cfg config.Config, db *store.DB, connector string, stop func(), logger *log.Logger) *Master {
@@ -52,6 +55,7 @@ func New(cfg config.Config, db *store.DB, connector string, stop func(), logger 
 		stop:      stop,
 		log:       logger,
 		procs:     make(map[int64]*proc),
+		engines:   make(map[int64]*resolve.Engine),
 		subs:      make(map[chan logEvent]struct{}),
 	}
 }
@@ -72,6 +76,8 @@ func (m *Master) Handler() http.Handler {
 	mux.HandleFunc("POST /api/servers/{id}/start", m.auth(m.apiServersStart))
 	mux.HandleFunc("POST /api/servers/{id}/stop", m.auth(m.apiServersStop))
 	mux.HandleFunc("POST /api/servers/{id}/cycle", m.auth(m.apiServersCycle))
+	mux.HandleFunc("POST /api/servers/{id}/import", m.auth(m.apiImportLinks))
+	mux.HandleFunc("GET /api/links", m.auth(m.apiLinksList))
 	mux.HandleFunc("POST /api/join", m.auth(m.apiJoin))
 	mux.HandleFunc("POST /api/part", m.auth(m.apiPart))
 	mux.HandleFunc("POST /api/privmsg", m.auth(m.apiPrivmsg))
@@ -116,31 +122,83 @@ func (m *Master) onEvent(id int64, cl *control.Client, ev control.Event) {
 	if msg.Command != "PRIVMSG" {
 		return
 	}
-	name, args, ok := ParseDot(msg.Last())
-	if !ok {
+	dest := ""
+	if len(msg.Params) > 0 {
+		dest = msg.Params[0]
+	}
+	text := msg.Last()
+	if name, args, ok := ParseDot(text); ok {
+		b, err := m.db.Get(id)
+		if err != nil {
+			return
+		}
+		role := acl.Role(b.Owners, b.Admins, msg.Nick, msg.User, msg.Host)
+		if role == "" {
+			return
+		}
+		st, _ := cl.Status()
+		if msg.Nick != "" && msg.Nick == st.Nick {
+			return
+		}
+		for _, a := range Dispatch(role, dest, msg.Nick, name, args, st) {
+			if err := m.apply(cl, a); err != nil {
+				m.log.Printf("%s: %v", a.Kind, err)
+			}
+		}
+		return
+	}
+	if !isChan(dest) {
+		return
+	}
+	st, _ := cl.Status()
+	if msg.Nick != "" && msg.Nick == st.Nick {
 		return
 	}
 	b, err := m.db.Get(id)
 	if err != nil {
 		return
 	}
-	role := acl.Role(b.Owners, b.Admins, msg.Nick, msg.User, msg.Host)
-	if role == "" {
+	reply := m.engineFor(id, b).HandleMessage(context.Background(), dest, text)
+	if reply == "" {
 		return
 	}
-	dest := ""
-	if len(msg.Params) > 0 {
-		dest = msg.Params[0]
+	if err := cl.Privmsg(dest, reply); err != nil {
+		m.log.Printf("resolve: %v", err)
 	}
-	st, _ := cl.Status()
-	if msg.Nick != "" && msg.Nick == st.Nick {
+	raw := resolve.FirstURL(text)
+	if err := m.db.InsertLink(id, dest, msg.Nick, raw, reply); err != nil {
+		m.log.Printf("link: %v", err)
+	}
+}
+
+func (m *Master) engineFor(id int64, b store.Bundle) *resolve.Engine {
+	cfg := b.ResolveConfig()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if e := m.engines[id]; e != nil {
+		e.UpdateConfig(cfg)
+		return e
+	}
+	e := resolve.New(m.log, cfg)
+	m.engines[id] = e
+	return e
+}
+
+func (m *Master) syncEngine(id int64, b store.Bundle) {
+	cfg := b.ResolveConfig()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if e := m.engines[id]; e != nil {
+		e.UpdateConfig(cfg)
 		return
 	}
-	for _, a := range Dispatch(role, dest, msg.Nick, name, args, st) {
-		if err := m.apply(cl, a); err != nil {
-			m.log.Printf("%s: %v", a.Kind, err)
-		}
-	}
+	m.engines[id] = resolve.New(m.log, cfg)
+}
+
+func (m *Master) dropEngine(id int64) {
+	m.mu.Lock()
+	delete(m.engines, id)
+	m.mu.Unlock()
 }
 
 func (m *Master) apply(cl *control.Client, a Act) error {
@@ -435,6 +493,7 @@ func (m *Master) apiServersCreate(w http.ResponseWriter, r *http.Request) {
 			m.log.Printf("start %d: %v", out.ID, err)
 		}
 	}
+	m.syncEngine(out.ID, out)
 	writeJSON(w, m.withRuntime(out))
 }
 
@@ -485,6 +544,7 @@ func (m *Master) apiServersPut(w http.ResponseWriter, r *http.Request) {
 			m.log.Printf("restart %d: %v", id, err)
 		}
 	}
+	m.syncEngine(id, out)
 	writeJSON(w, m.withRuntime(out))
 }
 
@@ -495,6 +555,7 @@ func (m *Master) apiServersDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = m.StopServer(id)
+	m.dropEngine(id)
 	if err := m.db.Delete(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -539,6 +600,72 @@ func (m *Master) apiServersCycle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+const importMax = 32 << 20
+
+func (m *Master) apiImportLinks(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	if _, err := m.db.Get(id); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, importMax)
+	var body io.Reader = r.Body
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+		if err := r.ParseMultipartForm(importMax); err != nil {
+			http.Error(w, "file too large or bad multipart", http.StatusBadRequest)
+			return
+		}
+		f, _, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, "file required", http.StatusBadRequest)
+			return
+		}
+		defer f.Close()
+		body = f
+	}
+	links, skipped, err := store.ParseT3BLinks(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(links) == 0 && skipped == 0 {
+		http.Error(w, "empty file", http.StatusBadRequest)
+		return
+	}
+	st, err := m.db.ImportLinks(id, links)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	st.Skipped = skipped
+	writeJSON(w, st)
+}
+
+func (m *Master) apiLinksList(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.URL.Query().Get("server_id"), 10, 64)
+	if err != nil || id == 0 {
+		http.Error(w, "server_id required", http.StatusBadRequest)
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	q := r.URL.Query().Get("q")
+	list, err := m.db.ListLinks(id, q, offset, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if list == nil {
+		list = []store.Link{}
+	}
+	n, _ := m.db.CountLinks(id, q)
+	writeJSON(w, map[string]any{"total": n, "offset": offset, "links": list})
 }
 
 func writeSSE(w http.ResponseWriter, fl http.Flusher, ev logEvent) bool {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/iamtew/ting/internal/config"
 	"github.com/iamtew/ting/internal/gateway"
+	"github.com/iamtew/ting/internal/resolve"
 
 	_ "modernc.org/sqlite"
 )
@@ -42,6 +43,14 @@ type Bundle struct {
 	Channels         []string `json:"channels"`
 	Owners           []string `json:"owners"`
 	Admins           []string `json:"admins"`
+	URLTitles        *bool    `json:"url_titles"`
+	Twitter          *bool    `json:"twitter"`
+	Bluesky          *bool    `json:"bluesky"`
+	YouTube          *bool    `json:"youtube"`
+	YouTubeAPIKey    string   `json:"youtube_api_key"`
+	Reddit           *bool    `json:"reddit"`
+	UserAgent        string   `json:"user_agent"`
+	HTTPTimeoutSec   int      `json:"http_timeout_sec"`
 }
 
 func Open(path string) (*DB, error) {
@@ -99,6 +108,37 @@ CREATE TABLE IF NOT EXISTS connector (
   token TEXT NOT NULL,
   pid INTEGER NOT NULL DEFAULT 0
 );`)
+	if err != nil {
+		return err
+	}
+	// Existing DBs: add resolve columns (CREATE IF NOT EXISTS never alters).
+	for _, stmt := range []string{
+		`ALTER TABLE servers ADD COLUMN resolve_url_titles INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE servers ADD COLUMN resolve_twitter INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE servers ADD COLUMN resolve_bluesky INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE servers ADD COLUMN resolve_youtube INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE servers ADD COLUMN resolve_reddit INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE servers ADD COLUMN resolve_youtube_api_key TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE servers ADD COLUMN resolve_user_agent TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE servers ADD COLUMN resolve_http_timeout_sec INTEGER NOT NULL DEFAULT 8`,
+	} {
+		if _, err := d.sql.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+			return err
+		}
+	}
+	_, err = d.sql.Exec(`
+CREATE TABLE IF NOT EXISTS links (
+  id INTEGER PRIMARY KEY,
+  server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  datetime TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  user TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT NOT NULL,
+  UNIQUE(server_id, datetime, url)
+);
+CREATE INDEX IF NOT EXISTS links_server_dt ON links(server_id, datetime);`)
 	return err
 }
 
@@ -168,6 +208,11 @@ func (b *Bundle) Normalize() {
 	if strings.TrimSpace(b.SASLMechanism) == "" {
 		b.SASLMechanism = "PLAIN"
 	}
+	if b.HTTPTimeoutSec < 0 {
+		b.HTTPTimeoutSec = 0
+	}
+	b.YouTubeAPIKey = strings.TrimSpace(b.YouTubeAPIKey)
+	b.UserAgent = strings.TrimSpace(b.UserAgent)
 	b.Channels = cleanList(b.Channels)
 	b.Owners = cleanList(b.Owners)
 	b.Admins = cleanList(b.Admins)
@@ -179,6 +224,9 @@ func (b Bundle) Validate() error {
 	}
 	if b.Port < 1 || b.Port > 65535 {
 		return fmt.Errorf("port out of range")
+	}
+	if b.HTTPTimeoutSec != 0 && (b.HTTPTimeoutSec < 1 || b.HTTPTimeoutSec > 120) {
+		return fmt.Errorf("http_timeout_sec out of range (1-120)")
 	}
 	if !b.SASLEnabled {
 		return nil
@@ -195,6 +243,23 @@ func (b Bundle) Validate() error {
 	}
 	return nil
 }
+
+func (b Bundle) ResolveConfig() resolve.Config {
+	return resolve.Config{
+		URLTitles:      b.URLTitles,
+		Twitter:        b.Twitter,
+		Bluesky:        b.Bluesky,
+		YouTube:        b.YouTube,
+		YouTubeAPIKey:  b.YouTubeAPIKey,
+		Reddit:         b.Reddit,
+		UserAgent:      b.UserAgent,
+		HTTPTimeoutSec: b.HTTPTimeoutSec,
+	}
+}
+
+func flagOn(p *bool) bool { return p == nil || *p }
+
+func boolP(v bool) *bool { return &v }
 
 func cleanList(in []string) []string {
 	var out []string
@@ -268,13 +333,16 @@ func (d *DB) List() ([]Bundle, error) {
 
 func (d *DB) Get(id int64) (Bundle, error) {
 	var b Bundle
-	var tls, skip, en, sasl int
+	var tls, skip, en, sasl, ut, tw, bs, yt, rd, timeout int
 	err := d.sql.QueryRow(`
 SELECT id, name, host, port, tls, tls_skip_verify, enabled, nick, user, realname,
-       nickserv_password, sasl_enabled, sasl_mechanism, sasl_user, sasl_password
+       nickserv_password, sasl_enabled, sasl_mechanism, sasl_user, sasl_password,
+       resolve_url_titles, resolve_twitter, resolve_bluesky, resolve_youtube, resolve_reddit,
+       resolve_youtube_api_key, resolve_user_agent, resolve_http_timeout_sec
 FROM servers WHERE id = ?`, id).Scan(
 		&b.ID, &b.Name, &b.Host, &b.Port, &tls, &skip, &en, &b.Nick, &b.User, &b.Realname,
 		&b.NickServPassword, &sasl, &b.SASLMechanism, &b.SASLUser, &b.SASLPassword,
+		&ut, &tw, &bs, &yt, &rd, &b.YouTubeAPIKey, &b.UserAgent, &timeout,
 	)
 	if err != nil {
 		return b, err
@@ -283,6 +351,12 @@ FROM servers WHERE id = ?`, id).Scan(
 	b.TLSSkipVerify = skip != 0
 	b.Enabled = en != 0
 	b.SASLEnabled = sasl != 0
+	b.URLTitles = boolP(ut != 0)
+	b.Twitter = boolP(tw != 0)
+	b.Bluesky = boolP(bs != 0)
+	b.YouTube = boolP(yt != 0)
+	b.Reddit = boolP(rd != 0)
+	b.HTTPTimeoutSec = timeout
 	b.Channels, err = d.listCol(`SELECT name FROM channels WHERE server_id = ? ORDER BY name`, id)
 	if err != nil {
 		return b, err
@@ -325,10 +399,14 @@ func (d *DB) Put(b Bundle) (Bundle, error) {
 	if b.ID == 0 {
 		res, err := tx.Exec(`
 INSERT INTO servers (name, host, port, tls, tls_skip_verify, enabled, nick, user, realname,
-  nickserv_password, sasl_enabled, sasl_mechanism, sasl_user, sasl_password)
-VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  nickserv_password, sasl_enabled, sasl_mechanism, sasl_user, sasl_password,
+  resolve_url_titles, resolve_twitter, resolve_bluesky, resolve_youtube, resolve_reddit,
+  resolve_youtube_api_key, resolve_user_agent, resolve_http_timeout_sec)
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			b.Name, b.Host, b.Port, btoi(b.TLS), btoi(b.TLSSkipVerify), btoi(b.Enabled),
-			b.Nick, b.User, b.Realname, b.NickServPassword, btoi(b.SASLEnabled), b.SASLMechanism, b.SASLUser, b.SASLPassword)
+			b.Nick, b.User, b.Realname, b.NickServPassword, btoi(b.SASLEnabled), b.SASLMechanism, b.SASLUser, b.SASLPassword,
+			btoi(flagOn(b.URLTitles)), btoi(flagOn(b.Twitter)), btoi(flagOn(b.Bluesky)), btoi(flagOn(b.YouTube)), btoi(flagOn(b.Reddit)),
+			b.YouTubeAPIKey, b.UserAgent, timeoutOrDefault(b.HTTPTimeoutSec))
 		if err != nil {
 			return b, err
 		}
@@ -339,9 +417,13 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 	} else {
 		_, err := tx.Exec(`
 UPDATE servers SET name=?, host=?, port=?, tls=?, tls_skip_verify=?, enabled=?, nick=?, user=?, realname=?,
-  nickserv_password=?, sasl_enabled=?, sasl_mechanism=?, sasl_user=?, sasl_password=? WHERE id=?`,
+  nickserv_password=?, sasl_enabled=?, sasl_mechanism=?, sasl_user=?, sasl_password=?,
+  resolve_url_titles=?, resolve_twitter=?, resolve_bluesky=?, resolve_youtube=?, resolve_reddit=?,
+  resolve_youtube_api_key=?, resolve_user_agent=?, resolve_http_timeout_sec=? WHERE id=?`,
 			b.Name, b.Host, b.Port, btoi(b.TLS), btoi(b.TLSSkipVerify), btoi(b.Enabled),
-			b.Nick, b.User, b.Realname, b.NickServPassword, btoi(b.SASLEnabled), b.SASLMechanism, b.SASLUser, b.SASLPassword, b.ID)
+			b.Nick, b.User, b.Realname, b.NickServPassword, btoi(b.SASLEnabled), b.SASLMechanism, b.SASLUser, b.SASLPassword,
+			btoi(flagOn(b.URLTitles)), btoi(flagOn(b.Twitter)), btoi(flagOn(b.Bluesky)), btoi(flagOn(b.YouTube)), btoi(flagOn(b.Reddit)),
+			b.YouTubeAPIKey, b.UserAgent, timeoutOrDefault(b.HTTPTimeoutSec), b.ID)
 		if err != nil {
 			return b, err
 		}
@@ -392,6 +474,13 @@ ON CONFLICT(server_id) DO UPDATE SET listen=excluded.listen, token=excluded.toke
 func (d *DB) ClearConnector(id int64) error {
 	_, err := d.sql.Exec(`DELETE FROM connector WHERE server_id=?`, id)
 	return err
+}
+
+func timeoutOrDefault(sec int) int {
+	if sec <= 0 {
+		return 8
+	}
+	return sec
 }
 
 func btoi(v bool) int {
