@@ -144,6 +144,10 @@ CREATE TABLE IF NOT EXISTS karma (
   phrase TEXT NOT NULL,
   score INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (server_id, phrase)
+);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );`)
 	return err
 }

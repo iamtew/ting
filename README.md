@@ -37,6 +37,8 @@ Opens admin UI at `http://127.0.0.1:8080` (token from `control.token`). Ctrl+C s
 
 Channel URLs are resolved on master (Twitter/X, Bluesky, YouTube, Reddit, generic titles). Enable/disable per server on the server tab. The connector only keeps the IRC socket and forwards events. Channel karma is t3b-style (`phrase++` / `--` / `+d` / `+N..M`, public `.karma`). Public `.link` / `.l` searches the log (`.more` / `.m` pages). Import old t3b `links-*.log` and `karma-*.db` files on the **import** tab (drop onto the selected server). Browse links on the **links** tab.
 
+OpenRouter chat is on master. Set `[ai] api_key` in `config.toml` (empty key = off). The **ai** tab holds the system prompt, model list, sampling, and an optional channel-memory window. The bot replies when its nick is mentioned in a channel, or when someone queries it.
+
 Debug a connector alone: `ting-connector -listen 127.0.0.1:7391 -token x -spec spec.json`.
 
 ## Notes

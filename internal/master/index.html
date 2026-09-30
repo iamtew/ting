@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/css/solid.min.css">
 <link rel="stylesheet" href="/static/css/regular.min.css">
 <link rel="stylesheet" href="/static/css/brands.min.css">
-<link rel="stylesheet" href="/static/css/admin.css?v=8">
+<link rel="stylesheet" href="/static/css/admin.css?v=9">
 </head>
 <body>
 <header>
@@ -21,6 +21,7 @@
     <button type="button" data-tab="log">log</button>
     <button type="button" data-tab="links">links</button>
     <button type="button" data-tab="import">import</button>
+    <button type="button" data-tab="ai">ai</button>
   </nav>
 </header>
 <div class="strip">
@@ -131,6 +132,58 @@
   <input id="impfile" type="file" multiple accept=".log,.jsonl,.json,.db,.sqlite,text/plain,application/octet-stream">
 </div>
 <p id="impst" class="hint"></p>
+</section>
+<section id="tab-ai" hidden>
+<form id="aiform">
+<fieldset>
+<legend>openrouter</legend>
+<p id="aist" class="hint">loading…</p>
+<label class="check"><input type="checkbox" id="ai-enabled" checked> chat on</label>
+<label class="field">model <select id="ai-model"></select></label>
+<div class="row">
+<input id="ai-model-new" maxlength="200" placeholder="openrouter/model-id" autocomplete="off">
+<button type="button" id="ai-model-add">add</button>
+<button type="button" id="ai-model-remove">remove</button>
+</div>
+<label class="field">system prompt
+<textarea id="ai-system-prompt" rows="8" spellcheck="true"></textarea>
+</label>
+<label class="check"><input type="checkbox" id="ai-memory"> channel memory</label>
+<label class="samp"><span>recent lines</span>
+<input type="range" id="ai-memory-window" min="1" max="12" step="1" value="8">
+<output id="ai-memory-out">8</output>
+</label>
+<p class="hint">When on, a channel reply includes the last N lines from that channel. The ring is forgotten on restart.</p>
+<details>
+<summary>sampling</summary>
+<div class="samps">
+<label class="samp"><span>max tokens</span><input type="range" data-sampling="max_tokens" data-int="1" min="0" max="8192" step="1" value="0"><output>0</output></label>
+<label class="samp"><span>temperature</span><input type="range" data-sampling="temperature" min="0" max="2" step="0.001" value="0.7"><output>0.700</output></label>
+<label class="samp"><span>top p</span><input type="range" data-sampling="top_p" min="0" max="1" step="0.001" value="1"><output>1.000</output></label>
+<label class="samp"><span>top k</span><input type="range" data-sampling="top_k" data-int="1" min="0" max="200" step="1" value="0"><output>0</output></label>
+<label class="samp"><span>frequency</span><input type="range" data-sampling="frequency_penalty" min="-2" max="2" step="0.001" value="0"><output>0.000</output></label>
+<label class="samp"><span>presence</span><input type="range" data-sampling="presence_penalty" min="-2" max="2" step="0.001" value="0"><output>0.000</output></label>
+<label class="samp"><span>repetition</span><input type="range" data-sampling="repetition_penalty" min="0" max="2" step="0.001" value="1"><output>1.000</output></label>
+<label class="samp"><span>min p</span><input type="range" data-sampling="min_p" min="0" max="1" step="0.001" value="0"><output>0.000</output></label>
+<label class="samp"><span>top a</span><input type="range" data-sampling="top_a" min="0" max="1" step="0.001" value="0"><output>0.000</output></label>
+</div>
+</details>
+<div class="actions">
+<button type="submit"><i class="fa-solid fa-floppy-disk"></i> save</button>
+<button type="button" id="ai-cancel">cancel</button>
+</div>
+</fieldset>
+</form>
+<fieldset id="aichat">
+<legend>test chat</legend>
+<p class="hint">Uses the saved system prompt. This transcript stays in the browser.</p>
+<div id="aichatlog"></div>
+<form id="aichatform" class="composer">
+<input id="ai-chat-input" maxlength="2000" placeholder="say something" autocomplete="off">
+<button type="submit" id="ai-chat-send">send</button>
+<button type="button" id="ai-chat-clear">clear</button>
+</form>
+</fieldset>
 </section>
 </div>
 <script>
@@ -557,12 +610,156 @@ drop.addEventListener('drop', e => {
 });
 inp.addEventListener('change', () => { importFiles(inp.files); inp.value = ''; });
 document.getElementById('linkmore').onclick = () => browseLinks(true);
+let aiLines = [];
+function sampInputs() { return document.querySelectorAll('[data-sampling]'); }
+function sampText(input) {
+  const n = Number(input.value);
+  return input.getAttribute('data-int') === '1' ? String(Math.round(n)) : n.toFixed(3);
+}
+function syncSamp(input) {
+  const out = input.parentElement && input.parentElement.querySelector('output');
+  if (out) out.textContent = sampText(input);
+}
+function readSamp() {
+  const out = {};
+  sampInputs().forEach(input => {
+    const n = Number(input.value);
+    out[input.getAttribute('data-sampling')] = input.getAttribute('data-int') === '1' ? Math.round(n) : n;
+  });
+  return out;
+}
+function fillSamp(sampling) {
+  sampInputs().forEach(input => {
+    const key = input.getAttribute('data-sampling');
+    if (sampling[key] == null) return;
+    input.value = sampling[key];
+    syncSamp(input);
+  });
+}
+function fillModels(data) {
+  const sel = document.getElementById('ai-model');
+  const models = Array.isArray(data.models) ? data.models : [];
+  sel.replaceChildren();
+  for (const id of models) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id;
+    sel.append(opt);
+  }
+  if (data.model) sel.value = data.model;
+  document.getElementById('ai-model-remove').disabled = models.length < 2;
+}
+function modelList() {
+  return Array.from(document.querySelectorAll('#ai-model option')).map(o => o.value);
+}
+function syncMemoryOut() {
+  document.getElementById('ai-memory-out').textContent = String(Math.round(Number(document.getElementById('ai-memory-window').value)));
+}
+function renderAIChat() {
+  const el = document.getElementById('aichatlog');
+  el.replaceChildren();
+  if (!aiLines.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'send a message to try the model';
+    el.append(p);
+    return;
+  }
+  for (const line of aiLines) {
+    const p = document.createElement('p');
+    p.textContent = line.who + ': ' + line.text;
+    el.append(p);
+  }
+  el.scrollTop = el.scrollHeight;
+}
+async function loadAI() {
+  const r = await api('/api/ai');
+  if (!r || !r.ok) return;
+  const data = await r.json();
+  const key = data.configured ? 'api key set' : 'set ai.api_key in config.toml';
+  document.getElementById('aist').textContent = (data.model || '—') + ' · ' + key + ' · ' + (data.enabled === false ? 'off' : 'on');
+  document.getElementById('ai-enabled').checked = data.enabled !== false;
+  document.getElementById('ai-system-prompt').value = data.system_prompt || '';
+  document.getElementById('ai-memory').checked = data.memory_enabled === true;
+  const n = Number(data.memory_window);
+  document.getElementById('ai-memory-window').value = n >= 1 && n <= 12 ? String(n) : '8';
+  syncMemoryOut();
+  fillSamp(data.sampling || {});
+  fillModels(data);
+  document.getElementById('ai-chat-send').disabled = !data.configured;
+}
+async function saveModels(payload) {
+  const r = await api('/api/ai', payload, 'PUT');
+  if (r && r.ok) await loadAI();
+}
+sampInputs().forEach(input => input.addEventListener('input', () => syncSamp(input)));
+document.getElementById('ai-memory-window').addEventListener('input', syncMemoryOut);
+document.getElementById('ai-model').addEventListener('change', () => {
+  const sel = document.getElementById('ai-model');
+  if (sel.value) saveModels({model: sel.value});
+});
+document.getElementById('ai-model-new').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('ai-model-add').click(); }
+});
+document.getElementById('ai-model-add').addEventListener('click', () => {
+  const input = document.getElementById('ai-model-new');
+  const id = (input.value || '').trim();
+  if (!id) return;
+  const models = modelList();
+  if (!models.includes(id)) models.push(id);
+  input.value = '';
+  saveModels({models, model: id});
+});
+document.getElementById('ai-model-remove').addEventListener('click', () => {
+  const sel = document.getElementById('ai-model');
+  const id = sel.value;
+  const models = modelList().filter(m => m !== id);
+  if (!id || models.length < 1) return;
+  saveModels({models, model: models[0]});
+});
+document.getElementById('ai-cancel').addEventListener('click', () => loadAI());
+document.getElementById('aiform').addEventListener('submit', async e => {
+  e.preventDefault();
+  const r = await api('/api/ai', {
+    enabled: document.getElementById('ai-enabled').checked,
+    system_prompt: document.getElementById('ai-system-prompt').value,
+    sampling: readSamp(),
+    memory_enabled: document.getElementById('ai-memory').checked,
+    memory_window: Math.round(Number(document.getElementById('ai-memory-window').value))
+  }, 'PUT');
+  if (r && r.ok) await loadAI();
+});
+document.getElementById('aichatform').addEventListener('submit', async e => {
+  e.preventDefault();
+  const input = document.getElementById('ai-chat-input');
+  const msg = (input.value || '').trim();
+  if (!msg) return;
+  const btn = document.getElementById('ai-chat-send');
+  btn.disabled = true;
+  aiLines.push({who: 'you', text: msg});
+  renderAIChat();
+  input.value = '';
+  const r = await api('/api/ai/chat', {message: msg});
+  if (r && r.ok) {
+    const data = await r.json();
+    aiLines.push({who: 'ting', text: data.reply || ''});
+  } else {
+    aiLines.push({who: 'error', text: 'request failed'});
+  }
+  renderAIChat();
+  btn.disabled = false;
+});
+document.getElementById('ai-chat-clear').addEventListener('click', () => {
+  aiLines = [];
+  renderAIChat();
+});
+renderAIChat();
 let linkT;
 document.getElementById('linkq').addEventListener('input', () => {
   clearTimeout(linkT);
   linkT = setTimeout(() => browseLinks(false), 150);
 });
-const tabs = ['live', 'server', 'control', 'log', 'links', 'import'];
+const tabs = ['live', 'server', 'control', 'log', 'links', 'import', 'ai'];
 function showTab(name) {
   if (!tabs.includes(name)) name = 'live';
   for (const t of tabs) {
@@ -571,6 +768,7 @@ function showTab(name) {
   }
   if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
   if (name === 'links') browseLinks(false);
+  if (name === 'ai') loadAI();
 }
 document.querySelector('.tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');

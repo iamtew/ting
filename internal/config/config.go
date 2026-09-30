@@ -27,6 +27,7 @@ type Config struct {
 	Identity Identity `toml:"identity"`
 	Control  Control  `toml:"control"`
 	Admin    Admin    `toml:"admin"`
+	AI       AI       `toml:"ai"`
 }
 
 type Server struct {
@@ -55,6 +56,13 @@ type Control struct {
 
 type Admin struct {
 	Listen string `toml:"listen"`
+}
+
+// AI is the OpenRouter key. Prompt, model catalog, and sampling live in SQLite.
+// Model is used only until the admin catalog is saved.
+type AI struct {
+	APIKey string `toml:"api_key"`
+	Model  string `toml:"model"`
 }
 
 func Load(path string) (Config, error) {

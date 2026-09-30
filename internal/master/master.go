@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/iamtew/ting/internal/acl"
+	"github.com/iamtew/ting/internal/ai"
 	"github.com/iamtew/ting/internal/config"
 	"github.com/iamtew/ting/internal/control"
 	"github.com/iamtew/ting/internal/gateway"
@@ -45,6 +46,10 @@ type Master struct {
 	pages   *linkPager
 	tail    []logEvent
 	subs    map[chan logEvent]struct{}
+
+	aiClient *ai.Client
+	mem      chatMem
+	aiOnce   sync.Once
 }
 
 func New(cfg config.Config, db *store.DB, connector string, stop func(), logger *log.Logger) *Master {
@@ -61,6 +66,7 @@ func New(cfg config.Config, db *store.DB, connector string, stop func(), logger 
 		engines:   make(map[int64]*resolve.Engine),
 		pages:     newLinkPager(),
 		subs:      make(map[chan logEvent]struct{}),
+		aiClient:  ai.New(cfg.AI.APIKey),
 	}
 }
 
@@ -89,6 +95,9 @@ func (m *Master) Handler() http.Handler {
 	mux.HandleFunc("POST /api/raw", m.auth(m.apiRaw))
 	mux.HandleFunc("POST /api/quit", m.auth(m.apiQuit))
 	mux.HandleFunc("POST /api/shutdown", m.auth(m.apiShutdown))
+	mux.HandleFunc("GET /api/ai", m.auth(m.apiAIGet))
+	mux.HandleFunc("PUT /api/ai", m.auth(m.apiAIPut))
+	mux.HandleFunc("POST /api/ai/chat", m.auth(m.apiAIChat))
 	return mux
 }
 
@@ -174,7 +183,13 @@ func (m *Master) onEvent(id int64, cl *control.Client, ev control.Event) {
 		return
 	}
 	if !isChan(dest) {
+		if !ctcp(text) {
+			m.replyAI(id, cl, msg.Nick, st.Nick, msg.Nick, text, false)
+		}
 		return
+	}
+	if !ctcp(text) {
+		m.noteOrReply(id, cl, dest, msg.Nick, st.Nick, text)
 	}
 	lines, handled, err := karmaBumpReplies(m.db, id, st.Nick, msg.Nick, text)
 	if err != nil {

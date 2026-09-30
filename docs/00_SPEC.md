@@ -62,6 +62,8 @@ URL resolve (master, not the connector): first http(s) URL in a channel PRIVMSG.
 
 Karma (master): channel `phrase++` / `phrase--` (silent ±1), `+d`/`-d` (dice 1–6), `+N..M`/`-N..M` (random, max 23). Public `.karma` / `.karma <phrase>` in channel or DM. Scores per server in `ting.db`.
 
+AI chat (master): OpenRouter. API key in `config.toml` `[ai]` (`api_key` empty = off; `model` is only the first catalog until Admin saves one). Admin **ai** tab: on/off, model list, system prompt, sampling, optional channel memory (in-memory, dropped on restart), test chat. IRC: reply when the current nick is mentioned in a channel, or on any non-command query. Replies are trimmed to one IRC line. Does not replace URL resolve or karma.
+
 Admin: `.join` `.leave` `.op` `.deop`
 
 Owner/admin: `.help` `.status` `.say`
@@ -73,7 +75,7 @@ Automode: if we have +o, keep owners/admins +o.
 ## Later (not now)
 
 - SQLite message/event log
-- AI: mention replies, `.summary`, optional memory
+- `.summary`
 - Discord etc. when v1 is boring
 - `.restart` / `.reload` / automode
 
@@ -82,4 +84,4 @@ Automode: if we have +o, keep owners/admins +o.
 1. Gateway + join/recv/send/reconnect.
 2. Control HTTP + master admin UI + permissions + admin commands.
 3. SQLite servers + master-spawned connectors.
-4. Channel URL resolve (master). Then message log, then AI.
+4. Channel URL resolve (master). AI chat (master). Then message log.
