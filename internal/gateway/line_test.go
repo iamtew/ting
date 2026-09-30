@@ -51,16 +51,32 @@ func TestMaps(t *testing.T) {
 	if len(nicks) != 3 {
 		t.Fatalf("nicks %v", nicks)
 	}
+	if nicks[0] != "@ting" || nicks[1] != "+alice" || nicks[2] != "bob" {
+		t.Fatalf("order %v", nicks)
+	}
 	_ = g.handle(Parse(":bob!~b@h QUIT :bye"))
 	if len(g.ChannelNicks("#ting")) != 2 {
 		t.Fatalf("after quit %v", g.ChannelNicks("#ting"))
 	}
 	_ = g.handle(Parse(":alice!~a@h NICK :ally"))
-	found := map[string]bool{}
-	for _, n := range g.ChannelNicks("#ting") {
-		found[n] = true
+	nicks = g.ChannelNicks("#ting")
+	if len(nicks) != 2 || nicks[0] != "@ting" || nicks[1] != "+ally" {
+		t.Fatalf("nick change %v", nicks)
 	}
-	if !found["ally"] || found["alice"] {
-		t.Fatalf("nick change %v", g.ChannelNicks("#ting"))
+}
+
+func TestModePrefix(t *testing.T) {
+	g := New(testCfg(), nil)
+	_ = g.handle(Parse(":ting!~t@h JOIN :#ting"))
+	_ = g.handle(Parse(":irc 353 ting = #ting :ting alice"))
+	_ = g.handle(Parse(":x!u@h MODE #ting +o alice"))
+	nicks := g.ChannelNicks("#ting")
+	if len(nicks) != 2 || nicks[0] != "@alice" || nicks[1] != "ting" {
+		t.Fatalf("op %v", nicks)
+	}
+	_ = g.handle(Parse(":x!u@h MODE #ting -o+v alice alice"))
+	nicks = g.ChannelNicks("#ting")
+	if nicks[0] != "+alice" {
+		t.Fatalf("voice %v", nicks)
 	}
 }

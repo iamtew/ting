@@ -8,12 +8,12 @@
 <link rel="stylesheet" href="/static/css/solid.min.css">
 <link rel="stylesheet" href="/static/css/regular.min.css">
 <link rel="stylesheet" href="/static/css/brands.min.css">
-<link rel="stylesheet" href="/static/css/admin.css">
+<link rel="stylesheet" href="/static/css/admin.css?v=5">
 </head>
 <body>
 <header>
   <img class="mark" src="/static/img/dummy.png" alt="">
-  <h1>TiNG</h1>
+  <h1 class="brand">TiNG</h1>
   <nav class="tabs">
     <button type="button" data-tab="live">live</button>
     <button type="button" data-tab="server">server</button>
@@ -23,14 +23,27 @@
 </header>
 <div class="strip">
 <label class="pick">server <select id="slist"></select></label>
-<p id="st">…</p>
+<p id="st"><span class="chip">…</span><span class="meta"></span></p>
 <form id="startf"><button><i class="fa-solid fa-play"></i> start</button></form>
 <form id="cyclef"><button><i class="fa-solid fa-rotate"></i> cycle</button></form>
 <form id="stopf"><button class="danger"><i class="fa-solid fa-power-off"></i> stop connector</button></form>
 </div>
 <div class="stage">
 <section id="tab-live">
-<div id="chs"></div>
+  <div class="chlist">
+    <h2>channels</h2>
+    <ul id="chul"></ul>
+    <form id="joinlive" class="joinf"><input name="channel" placeholder="#channel"><button type="submit"><i class="fa-solid fa-plus"></i></button></form>
+  </div>
+  <div class="pane">
+    <h2 id="chantitle">—</h2>
+    <div id="msgs"></div>
+    <form id="saylive" class="composer"><input name="text" id="saybox" placeholder="message  /nick /raw /quit" autocomplete="off"><button type="submit"><i class="fa-solid fa-comment"></i> send</button></form>
+  </div>
+  <div class="nicks">
+    <h2>nicks</h2>
+    <ul id="nickul"></ul>
+  </div>
 </section>
 <section id="tab-server" hidden>
 <form id="edit">
@@ -82,23 +95,61 @@
 <fieldset>
 <legend>channel</legend>
 <form id="join"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-plus"></i> join</button></form>
-<form id="part"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-minus"></i> part</button></form>
-</fieldset>
-<fieldset>
-<legend>talk</legend>
-<form id="say"><input name="target" placeholder="target"><input name="text" placeholder="text"><button><i class="fa-solid fa-comment"></i> say</button></form>
-<form id="nick"><input name="nick" placeholder="nick"><button><i class="fa-solid fa-id-card"></i> nick</button></form>
-<form id="raw"><input name="line" placeholder="raw IRC"><button><i class="fa-solid fa-terminal"></i> raw</button></form>
-<form id="quit"><button><i class="fa-solid fa-plug"></i> quit (reconnect)</button></form>
+<form id="part"><select name="channel" id="partch"></select><button><i class="fa-solid fa-minus"></i> part</button></form>
 </fieldset>
 </section>
 <section id="tab-log" hidden>
-<pre id="log"></pre>
+<div class="logbar"><label class="check"><input type="checkbox" id="logsel" checked> this server</label></div>
+<div id="log"></div>
 </section>
 </div>
 <script>
 let sid = 0, servers = [], pick = true, primed = false;
+const chpick = {}, chUser = {}, bufs = {}, extra = {}, logEv = [];
+const cap = 200;
 function lines(s) { return (s || '').split(/[\s,]+/).map(x => x.trim()).filter(Boolean); }
+function isChan(t) { return t && (t[0] === '#' || t[0] === '&' || t[0] === '+' || t[0] === '!'); }
+function srvKey() { return '*'; }
+function isSrv(t) { return t === '*'; }
+function srvLabel(s) {
+  return (s && s.gateway && s.gateway.server) || (s && (s.name || s.host)) || 'server';
+}
+function ourNick() {
+  const s = selected();
+  return (s && s.gateway && s.gateway.nick) || '';
+}
+function pad(n) { return String(n).padStart(2, '0'); }
+function clock(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '??:??:??';
+  return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+}
+function parseIRC(line) {
+  line = (line || '').replace(/\r?\n$/, '');
+  const m = { nick: '', user: '', cmd: '', params: [] };
+  if (!line) return m;
+  let rest = line;
+  if (rest[0] === ':') {
+    const sp = rest.indexOf(' ');
+    const pref = rest.slice(1, sp < 0 ? rest.length : sp);
+    rest = sp < 0 ? '' : rest.slice(sp + 1).trimStart();
+    const bang = pref.indexOf('!'), at = pref.indexOf('@');
+    m.nick = bang >= 0 ? pref.slice(0, bang) : (at >= 0 ? pref.slice(0, at) : pref);
+    if (bang >= 0) m.user = pref.slice(bang + 1, at >= 0 ? at : pref.length);
+  }
+  if (!rest) return m;
+  const sp = rest.indexOf(' ');
+  m.cmd = (sp < 0 ? rest : rest.slice(0, sp)).toUpperCase();
+  rest = sp < 0 ? '' : rest.slice(sp + 1);
+  while (rest) {
+    if (rest[0] === ':') { m.params.push(rest.slice(1)); break; }
+    const i = rest.indexOf(' ');
+    if (i < 0) { m.params.push(rest); break; }
+    if (rest.slice(0, i)) m.params.push(rest.slice(0, i));
+    rest = rest.slice(i + 1);
+  }
+  return m;
+}
 async function api(path, body, method) {
   const opt = {method: method || (body === undefined ? 'GET' : 'POST')};
   if (body !== undefined) {
@@ -141,6 +192,146 @@ function fillForm(s) {
   f.admins.value = (s.admins || []).join('\n');
 }
 function selected() { return servers.find(s => s.id === sid); }
+function chanList(s) {
+  const g = (s && s.gateway && s.gateway.channels) || {};
+  const names = Object.keys(g).filter(isChan).sort();
+  const q = (extra[s && s.id] || []).filter(x => !isSrv(x) && !names.includes(x)).sort();
+  return [srvKey()].concat(names, q);
+}
+function currentChan() {
+  const names = chanList(selected());
+  let c = chpick[sid];
+  if (chUser[sid] && c && names.includes(c)) return c;
+  c = names.find(isChan) || names[0] || '';
+  chpick[sid] = c;
+  return c;
+}
+function pushBuf(serverId, target, row) {
+  if (!target) return;
+  if (!bufs[serverId]) bufs[serverId] = {};
+  const arr = bufs[serverId][target] || (bufs[serverId][target] = []);
+  arr.push(row);
+  if (arr.length > cap) arr.splice(0, arr.length - cap);
+  if (!isChan(target) && !isSrv(target)) {
+    extra[serverId] = extra[serverId] || [];
+    if (!extra[serverId].includes(target)) extra[serverId].push(target);
+  }
+}
+function ingest(ev) {
+  const id = ev.server_id;
+  const t = ev.time;
+  if (ev.kind && ev.kind !== 'line') {
+    pushBuf(id, srvKey(), {t, sys: true, nick: '*', text: ev.kind});
+    return;
+  }
+  if (!ev.line) return;
+  const m = parseIRC(ev.line);
+  if (m.cmd === 'PING' || m.cmd === 'PONG' || m.cmd === '353' || m.cmd === '366') return;
+  if (m.cmd === 'PRIVMSG' || m.cmd === 'NOTICE') {
+    const dest = m.params[0] || '';
+    const text = m.params[m.params.length - 1] || '';
+    if (isChan(dest)) {
+      pushBuf(id, dest, {t, sys: false, nick: m.nick || dest, text});
+      return;
+    }
+    if (m.cmd === 'PRIVMSG' && m.user && m.nick.indexOf('.') < 0 && text.charCodeAt(0) !== 1) {
+      const me = (servers.find(s => s.id === id) || {}).gateway;
+      const nick = (me && me.nick) || '';
+      if (nick && dest.toLowerCase() === nick.toLowerCase()) {
+        pushBuf(id, m.nick, {t, sys: false, nick: m.nick, text});
+        return;
+      }
+    }
+    pushBuf(id, srvKey(), {t, sys: true, nick: m.nick || dest || m.cmd, text});
+    return;
+  }
+  if (m.cmd === 'JOIN' || m.cmd === 'PART') {
+    const ch = m.params[0] || '';
+    if (isChan(ch)) pushBuf(id, ch, {t, sys: true, nick: '*', text: m.nick + ' ' + m.cmd.toLowerCase() + ' ' + ch});
+    return;
+  }
+  if (m.cmd === 'NICK') {
+    const nn = m.params[0] || '';
+    const names = Object.keys((bufs[id] || {})).filter(n => !isSrv(n));
+    for (const ch of names) pushBuf(id, ch, {t, sys: true, nick: '*', text: m.nick + ' is now ' + nn});
+    return;
+  }
+  const text = m.params.length ? m.params[m.params.length - 1] : ev.line;
+  pushBuf(id, srvKey(), {t, sys: true, nick: m.nick || m.cmd, text});
+}
+function bareNick(n) { return String(n || '').replace(/^[~&@%+]+/, ''); }
+function nickRank(n) {
+  const i = '~&@%+'.indexOf(n[0]);
+  return i < 0 ? 5 : i;
+}
+function sortNicks(list) {
+  return (list || []).slice().sort((a, b) => nickRank(a) - nickRank(b) || bareNick(a).localeCompare(bareNick(b), undefined, {sensitivity: 'base'}));
+}
+function renderLive() {
+  const s = selected();
+  const ch = currentChan();
+  document.getElementById('chantitle').textContent = (isSrv(ch) ? srvLabel(s) : ch) || 'no channel';
+  const ul = document.getElementById('chul');
+  ul.replaceChildren();
+  for (const name of chanList(s)) {
+    const li = document.createElement('li');
+    li.textContent = isSrv(name) ? srvLabel(s) : name;
+    if (isSrv(name)) li.classList.add('srv');
+    if (name === ch) li.classList.add('on');
+    li.onclick = () => { chpick[sid] = name; chUser[sid] = true; renderLive(); };
+    ul.append(li);
+  }
+  const nu = document.getElementById('nickul');
+  nu.replaceChildren();
+  const nicks = sortNicks(((s && s.gateway && s.gateway.channels) || {})[ch] || []);
+  for (const n of nicks) {
+    const li = document.createElement('li');
+    const px = document.createElement('span');
+    px.className = 'px';
+    const mark = n.slice(0, n.length - bareNick(n).length);
+    px.textContent = mark || '\u00a0';
+    const nm = document.createElement('span');
+    nm.textContent = bareNick(n);
+    li.append(px, nm);
+    li.onclick = () => {
+      const box = document.getElementById('saybox');
+      const who = bareNick(n);
+      box.value = who + ': ' + box.value.replace(new RegExp('^' + who.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':\\s*'), '');
+      box.focus();
+    };
+    nu.append(li);
+  }
+  const box = document.getElementById('msgs');
+  const stick = box.scrollHeight - box.scrollTop < box.clientHeight + 40;
+  box.replaceChildren();
+  for (const row of ((bufs[sid] || {})[ch] || [])) {
+    const d = document.createElement('div');
+    d.className = 'm' + (row.sys ? ' sys' : '');
+    const tm = document.createElement('span'); tm.className = 'tm'; tm.textContent = clock(row.t);
+    const nk = document.createElement('span'); nk.className = 'nk'; nk.textContent = row.nick;
+    const tx = document.createElement('span'); tx.className = 'tx'; tx.textContent = row.text;
+    d.append(tm, nk, tx);
+    box.append(d);
+  }
+  if (stick) box.scrollTop = box.scrollHeight;
+}
+function renderLog() {
+  const only = document.getElementById('logsel').checked;
+  const el = document.getElementById('log');
+  const stick = el.scrollHeight - el.scrollTop < el.clientHeight + 40;
+  el.replaceChildren();
+  for (const ev of logEv) {
+    if (only && sid && ev.server_id && ev.server_id !== sid) continue;
+    const d = document.createElement('div');
+    d.className = 'logrow';
+    const tm = document.createElement('span'); tm.className = 'tm'; tm.textContent = clock(ev.time);
+    const kd = document.createElement('span'); kd.className = 'kd'; kd.textContent = ev.kind || '';
+    const ln = document.createElement('span'); ln.className = 'ln'; ln.textContent = ev.line || '';
+    d.append(tm, kd, ln);
+    el.append(d);
+  }
+  if (stick) el.scrollTop = el.scrollHeight;
+}
 async function refresh() {
   const r = await api('/api/servers');
   if (!r || !r.ok) return;
@@ -157,21 +348,37 @@ async function refresh() {
   sl.value = pick ? String(sid || '') : '0';
   const s = selected();
   const st = document.getElementById('st');
+  const chip = st.querySelector('.chip');
+  const meta = st.querySelector('.meta');
   if (!s) {
-    st.textContent = pick ? 'no servers' : 'new';
+    chip.textContent = pick ? 'none' : 'new';
+    meta.textContent = '';
     st.className = '';
-    document.getElementById('chs').textContent = '';
+    fillPart(null);
+    renderLive();
     return;
   }
   if (!primed) { fillForm(s); primed = true; }
   const g = s.gateway || {};
-  st.textContent = (s.running ? (g.connected ? 'up' : 'down') : 'stopped') + ' ' + (g.nick || '') + ' ' + (g.server || s.host) + (s.pid ? ' pid ' + s.pid : '');
-  st.className = g.connected ? 'up' : '';
-  let t = '';
-  for (const ch of Object.keys(g.channels || {}).sort()) {
-    t += ch + ' ' + (g.channels[ch] || []).join(' ') + '\n';
+  const state = s.running ? (g.connected ? 'up' : 'down') : 'stopped';
+  chip.textContent = state;
+  meta.textContent = [g.nick, g.server || s.host, s.pid ? 'pid ' + s.pid : ''].filter(Boolean).join(' · ');
+  st.className = state;
+  fillPart(s);
+  renderLive();
+}
+function fillPart(s) {
+  const sel = document.getElementById('partch');
+  const chans = Object.keys((s && s.gateway && s.gateway.channels) || {}).filter(isChan).sort();
+  const cur = sel.value;
+  const sig = chans.join('\n');
+  if (sel.dataset.sig !== sig) {
+    sel.dataset.sig = sig;
+    sel.replaceChildren();
+    for (const c of chans) sel.add(new Option(c, c));
   }
-  document.getElementById('chs').textContent = t;
+  if (chans.includes(cur)) sel.value = cur;
+  else if (isChan(chpick[sid]) && chans.includes(chpick[sid])) sel.value = chpick[sid];
 }
 function bind(id, fn) {
   document.getElementById(id).addEventListener('submit', async e => {
@@ -194,6 +401,8 @@ document.getElementById('slist').onchange = () => {
   const s = servers.find(x => x.id === id);
   if (!s) return;
   pick = true; primed = true; sid = id; fillForm(s);
+  renderLive();
+  renderLog();
 };
 document.getElementById('newbtn').onclick = () => { pick = false; sid = 0; primed = true; fillForm({enabled: true, tls: true}); refresh(); };
 document.getElementById('delbtn').onclick = async () => {
@@ -204,11 +413,32 @@ document.getElementById('delbtn').onclick = async () => {
   refresh();
 };
 bind('join', fd => api('/api/join', {server_id: sid, channel: fd.get('channel')}));
+bind('joinlive', fd => api('/api/join', {server_id: sid, channel: fd.get('channel')}));
 bind('part', fd => api('/api/part', {server_id: sid, channel: fd.get('channel')}));
-bind('say', fd => api('/api/privmsg', {server_id: sid, target: fd.get('target'), text: fd.get('text')}));
-bind('nick', fd => api('/api/nick', {server_id: sid, nick: fd.get('nick')}));
-bind('raw', fd => api('/api/raw', {server_id: sid, line: fd.get('line')}));
-bind('quit', () => api('/api/quit', {server_id: sid, reason: 'ting'}));
+bind('saylive', fd => {
+  const text = (fd.get('text') || '').trim();
+  document.getElementById('saybox').value = '';
+  if (!text) return;
+  if (text[0] === '/') {
+    const sp = text.indexOf(' ');
+    const cmd = (sp < 0 ? text.slice(1) : text.slice(1, sp)).toLowerCase();
+    const rest = sp < 0 ? '' : text.slice(sp + 1).trim();
+    if (cmd === 'nick' && rest) return api('/api/nick', {server_id: sid, nick: rest});
+    if (cmd === 'raw' && rest) return api('/api/raw', {server_id: sid, line: rest});
+    if (cmd === 'quit') return api('/api/quit', {server_id: sid, reason: rest || 'ting'});
+    if (cmd === 'join' && rest) return api('/api/join', {server_id: sid, channel: rest});
+    if (cmd === 'part') {
+      const ch = rest || (isChan(currentChan()) ? currentChan() : '');
+      if (ch) return api('/api/part', {server_id: sid, channel: ch});
+    }
+    return;
+  }
+  const target = currentChan();
+  if (!target || isSrv(target)) return;
+  pushBuf(sid, target, {t: new Date().toISOString(), sys: false, nick: ourNick() || 'me', text});
+  renderLive();
+  return api('/api/privmsg', {server_id: sid, target, text});
+});
 bind('startf', () => api('/api/servers/' + sid + '/start', {}));
 bind('cyclef', () => api('/api/servers/' + sid + '/cycle', {}));
 bind('stopf', () => api('/api/servers/' + sid + '/stop', {}));
@@ -227,13 +457,18 @@ document.querySelector('.tabs').addEventListener('click', e => {
 });
 addEventListener('hashchange', () => showTab(location.hash.slice(1)));
 showTab(location.hash.slice(1));
+document.getElementById('logsel').onchange = renderLog;
 refresh();
 setInterval(refresh, 2000);
-const log = document.getElementById('log');
 const es = new EventSource('/api/stream');
 es.onmessage = e => {
-  log.textContent += e.data + '\n';
-  log.scrollTop = log.scrollHeight;
+  let ev;
+  try { ev = JSON.parse(e.data); } catch { ev = {time: new Date().toISOString(), kind: 'line', line: e.data}; }
+  logEv.push(ev);
+  if (logEv.length > cap) logEv.splice(0, logEv.length - cap);
+  ingest(ev);
+  renderLog();
+  renderLive();
 };
 </script>
 </body>

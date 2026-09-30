@@ -91,14 +91,64 @@ func splitPrefix(p string) (nick, user, host string) {
 
 func fold(s string) string { return strings.ToLower(s) }
 
-func stripStatus(nick string) string {
-	for len(nick) > 0 {
-		switch nick[0] {
-		case '@', '+', '%', '~', '&':
-			nick = nick[1:]
-		default:
-			return nick
+const statusMarks = "~&@%+"
+
+func splitStatus(nick string) (pref, bare string) {
+	i := 0
+	for i < len(nick) && strings.IndexByte(statusMarks, nick[i]) >= 0 {
+		i++
+	}
+	return nick[:i], nick[i:]
+}
+
+func showPref(p string) string {
+	for i := 0; i < len(statusMarks); i++ {
+		if strings.IndexByte(p, statusMarks[i]) >= 0 {
+			return statusMarks[i : i+1]
 		}
 	}
-	return nick
+	return ""
+}
+
+func prefRank(p string) int {
+	for i := 0; i < len(statusMarks); i++ {
+		if strings.IndexByte(p, statusMarks[i]) >= 0 {
+			return i
+		}
+	}
+	return len(statusMarks)
+}
+
+func mergePref(old, add string, on bool) string {
+	have := [256]bool{}
+	for i := 0; i < len(old); i++ {
+		have[old[i]] = true
+	}
+	for i := 0; i < len(add); i++ {
+		have[add[i]] = on
+	}
+	var b strings.Builder
+	for i := 0; i < len(statusMarks); i++ {
+		if have[statusMarks[i]] {
+			b.WriteByte(statusMarks[i])
+		}
+	}
+	return b.String()
+}
+
+func letterPref(mode byte) byte {
+	switch mode {
+	case 'q':
+		return '~'
+	case 'a':
+		return '&'
+	case 'o':
+		return '@'
+	case 'h':
+		return '%'
+	case 'v':
+		return '+'
+	default:
+		return 0
+	}
 }

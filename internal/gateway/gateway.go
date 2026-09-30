@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -50,7 +51,7 @@ type Gateway struct {
 	mu        sync.RWMutex
 	nick      string
 	connected bool
-	chans     map[string]map[string]struct{} // folded channel -> nick set
+	chans     map[string]map[string]string // folded channel -> nick -> status marks (~&@%+)
 }
 
 func New(cfg Spec, logger *log.Logger) *Gateway {
@@ -63,7 +64,7 @@ func New(cfg Spec, logger *log.Logger) *Gateway {
 		events: make(chan Event, eventQ),
 		out:    make(chan string, sendQ),
 		nick:   cfg.Identity.Nick,
-		chans:  make(map[string]map[string]struct{}),
+		chans:  make(map[string]map[string]string),
 	}
 }
 
@@ -122,9 +123,24 @@ func (g *Gateway) ChannelNicks(channel string) []string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	set := g.chans[fold(channel)]
-	out := make([]string, 0, len(set))
-	for n := range set {
-		out = append(out, n)
+	type row struct {
+		rank int
+		nick string
+		show string
+	}
+	rows := make([]row, 0, len(set))
+	for n, p := range set {
+		rows = append(rows, row{prefRank(p), n, showPref(p) + n})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].rank != rows[j].rank {
+			return rows[i].rank < rows[j].rank
+		}
+		return strings.ToLower(rows[i].nick) < strings.ToLower(rows[j].nick)
+	})
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = r.show
 	}
 	return out
 }
@@ -136,6 +152,7 @@ func (g *Gateway) Channels() []string {
 	for ch := range g.chans {
 		out = append(out, ch)
 	}
+	sort.Strings(out)
 	return out
 }
 
@@ -324,6 +341,8 @@ func (g *Gateway) handle(msg Message) error {
 		g.onNick(msg.Nick, msg.Last())
 	case "353":
 		g.onNames(msg)
+	case "MODE":
+		g.onMode(msg)
 	}
 	return nil
 }
@@ -359,13 +378,15 @@ func (g *Gateway) onJoin(msg Message) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.chans[ch] == nil {
-		g.chans[ch] = make(map[string]struct{})
+		g.chans[ch] = make(map[string]string)
 	}
 	nick := msg.Nick
 	if nick == "" {
 		nick = g.nick
 	}
-	g.chans[ch][nick] = struct{}{}
+	if _, ok := g.chans[ch][nick]; !ok {
+		g.chans[ch][nick] = ""
+	}
 }
 
 func (g *Gateway) onLeave(msg Message) {
@@ -403,9 +424,9 @@ func (g *Gateway) onNick(old, neu string) {
 		g.nick = neu
 	}
 	for _, set := range g.chans {
-		if _, ok := set[old]; ok {
+		if p, ok := set[old]; ok {
 			delete(set, old)
-			set[neu] = struct{}{}
+			set[neu] = p
 		}
 	}
 }
@@ -421,17 +442,69 @@ func (g *Gateway) onNames(msg Message) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.chans[ch] == nil {
-		g.chans[ch] = make(map[string]struct{})
+		g.chans[ch] = make(map[string]string)
 	}
 	for _, n := range strings.Fields(msg.Last()) {
-		g.chans[ch][stripStatus(n)] = struct{}{}
+		pref, bare := splitStatus(n)
+		if bare == "" {
+			continue
+		}
+		g.chans[ch][bare] = pref
+	}
+}
+
+func (g *Gateway) onMode(msg Message) {
+	if len(msg.Params) < 2 {
+		return
+	}
+	ch := fold(msg.Params[0])
+	if ch == "" || (ch[0] != '#' && ch[0] != '&' && ch[0] != '+' && ch[0] != '!') {
+		return
+	}
+	spec := msg.Params[1]
+	args := msg.Params[2:]
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	set := g.chans[ch]
+	if set == nil {
+		return
+	}
+	add := true
+	ai := 0
+	for i := 0; i < len(spec); i++ {
+		c := spec[i]
+		if c == '+' {
+			add = true
+			continue
+		}
+		if c == '-' {
+			add = false
+			continue
+		}
+		p := letterPref(c)
+		if p == 0 {
+			// ponytail: eat one arg for common param modes; PREFIX/005 if a net uses odd letters
+			if strings.IndexByte("klbeIfj", c) >= 0 && ai < len(args) {
+				ai++
+			}
+			continue
+		}
+		if ai >= len(args) {
+			continue
+		}
+		nick := args[ai]
+		ai++
+		if _, ok := set[nick]; !ok {
+			continue
+		}
+		set[nick] = mergePref(set[nick], string(p), add)
 	}
 }
 
 func (g *Gateway) resetMaps() {
 	g.mu.Lock()
 	g.nick = g.cfg.Identity.Nick
-	g.chans = make(map[string]map[string]struct{})
+	g.chans = make(map[string]map[string]string)
 	g.mu.Unlock()
 }
 

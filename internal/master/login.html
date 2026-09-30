@@ -8,16 +8,16 @@
 <link rel="stylesheet" href="/static/css/solid.min.css">
 <link rel="stylesheet" href="/static/css/regular.min.css">
 <link rel="stylesheet" href="/static/css/brands.min.css">
-<link rel="stylesheet" href="/static/css/admin.css">
+<link rel="stylesheet" href="/static/css/admin.css?v=5">
 </head>
 <body class="login">
-<header>
-  <img class="mark" src="/static/img/dummy.png" alt="">
-  <h1>TiNG</h1>
-</header>
+<div class="card">
+<img class="mark" src="/static/img/dummy.png" alt="">
+<h1 class="brand">TiNG</h1>
 <form method="post" action="/login">
-<label>token <input type="password" name="token" required></label>
+<label>token <input type="password" name="token" required autofocus></label>
 <button><i class="fa-solid fa-right-to-bracket"></i> enter</button>
 </form>
+</div>
 </body>
 </html>
