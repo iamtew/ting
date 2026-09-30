@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/css/solid.min.css">
 <link rel="stylesheet" href="/static/css/regular.min.css">
 <link rel="stylesheet" href="/static/css/brands.min.css">
-<link rel="stylesheet" href="/static/css/admin.css?v=9">
+<link rel="stylesheet" href="/static/css/admin.css?v=10">
 </head>
 <body>
 <header>
@@ -17,7 +17,6 @@
   <nav class="tabs">
     <button type="button" data-tab="live">live</button>
     <button type="button" data-tab="server">server</button>
-    <button type="button" data-tab="control">control</button>
     <button type="button" data-tab="log">log</button>
     <button type="button" data-tab="links">links</button>
     <button type="button" data-tab="import">import</button>
@@ -105,8 +104,6 @@
 <button type="button" id="delbtn" class="danger"><i class="fa-solid fa-trash"></i> delete</button>
 </div>
 </form>
-</section>
-<section id="tab-control" hidden>
 <fieldset>
 <legend>channel</legend>
 <form id="join"><input name="channel" placeholder="#channel"><button><i class="fa-solid fa-plus"></i> join</button></form>
@@ -259,6 +256,16 @@ function bundleFromForm(fd) {
     youtube_api_key: fd.get('youtube_api_key'), user_agent: fd.get('user_agent'),
     http_timeout_sec: Number(fd.get('http_timeout_sec') || 0)
   };
+}
+function bumpFormChan(ch, add) {
+  const f = document.getElementById('edit');
+  const n = (ch || '').trim();
+  if (!n) return;
+  const chs = lines(f.channels.value);
+  const i = chs.indexOf(n);
+  if (add) { if (i < 0) chs.push(n); }
+  else if (i >= 0) chs.splice(i, 1);
+  f.channels.value = chs.join('\n');
 }
 function fillForm(s) {
   const f = document.getElementById('edit');
@@ -508,9 +515,21 @@ document.getElementById('delbtn').onclick = async () => {
   primed = false;
   refresh();
 };
-bind('join', fd => api('/api/join', {server_id: sid, channel: fd.get('channel')}));
-bind('joinlive', fd => api('/api/join', {server_id: sid, channel: fd.get('channel')}));
-bind('part', fd => api('/api/part', {server_id: sid, channel: fd.get('channel')}));
+bind('join', async fd => {
+  const ch = fd.get('channel');
+  const r = await api('/api/join', {server_id: sid, channel: ch});
+  if (r && r.ok) bumpFormChan(ch, true);
+});
+bind('joinlive', async fd => {
+  const ch = fd.get('channel');
+  const r = await api('/api/join', {server_id: sid, channel: ch});
+  if (r && r.ok) bumpFormChan(ch, true);
+});
+bind('part', async fd => {
+  const ch = fd.get('channel');
+  const r = await api('/api/part', {server_id: sid, channel: ch});
+  if (r && r.ok) bumpFormChan(ch, false);
+});
 bind('saylive', fd => {
   const text = (fd.get('text') || '').trim();
   document.getElementById('saybox').value = '';
@@ -522,10 +541,18 @@ bind('saylive', fd => {
     if (cmd === 'nick' && rest) return api('/api/nick', {server_id: sid, nick: rest});
     if (cmd === 'raw' && rest) return api('/api/raw', {server_id: sid, line: rest});
     if (cmd === 'quit') return api('/api/quit', {server_id: sid, reason: rest || 'ting'});
-    if (cmd === 'join' && rest) return api('/api/join', {server_id: sid, channel: rest});
+    if (cmd === 'join' && rest) {
+      const r = await api('/api/join', {server_id: sid, channel: rest});
+      if (r && r.ok) bumpFormChan(rest, true);
+      return r;
+    }
     if (cmd === 'part') {
       const ch = rest || (isChan(currentChan()) ? currentChan() : '');
-      if (ch) return api('/api/part', {server_id: sid, channel: ch});
+      if (ch) {
+        const r = await api('/api/part', {server_id: sid, channel: ch});
+        if (r && r.ok) bumpFormChan(ch, false);
+        return r;
+      }
     }
     return;
   }
@@ -759,8 +786,9 @@ document.getElementById('linkq').addEventListener('input', () => {
   clearTimeout(linkT);
   linkT = setTimeout(() => browseLinks(false), 150);
 });
-const tabs = ['live', 'server', 'control', 'log', 'links', 'import', 'ai'];
+const tabs = ['live', 'server', 'log', 'links', 'import', 'ai'];
 function showTab(name) {
+  if (name === 'control') name = 'server';
   if (!tabs.includes(name)) name = 'live';
   for (const t of tabs) {
     document.getElementById('tab-' + t).hidden = t !== name;

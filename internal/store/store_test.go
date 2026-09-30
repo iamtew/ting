@@ -98,6 +98,41 @@ func TestSpecEqualIgnoresNameACL(t *testing.T) {
 	}
 }
 
+func TestAddDropChannel(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "ting.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	b, err := d.Put(Bundle{Host: "irc.example.net", TLS: true, Channels: []string{"#a"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddChannel(b.ID, " #b "); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddChannel(b.ID, "#b"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.Get(b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Channels) != 2 || got.Channels[0] != "#a" || got.Channels[1] != "#b" {
+		t.Fatalf("%v", got.Channels)
+	}
+	if err := d.DropChannel(b.ID, "#a"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = d.Get(b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Channels) != 1 || got.Channels[0] != "#b" {
+		t.Fatalf("%v", got.Channels)
+	}
+}
+
 func TestConnectorPersist(t *testing.T) {
 	d, err := Open(filepath.Join(t.TempDir(), "ting.db"))
 	if err != nil {

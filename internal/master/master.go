@@ -421,6 +421,10 @@ func (m *Master) apiJoin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
+	if err := m.db.AddChannel(req.ServerID, req.Channel); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -432,6 +436,10 @@ func (m *Master) apiPart(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := cl.Part(req.Channel, req.Reason); err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if err := m.db.DropChannel(req.ServerID, req.Channel); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -467,6 +467,24 @@ func (d *DB) Delete(id int64) error {
 	return err
 }
 
+func (d *DB) AddChannel(id int64, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("channel is required")
+	}
+	_, err := d.sql.Exec(`INSERT OR IGNORE INTO channels (server_id, name) VALUES (?,?)`, id, name)
+	return err
+}
+
+func (d *DB) DropChannel(id int64, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("channel is required")
+	}
+	_, err := d.sql.Exec(`DELETE FROM channels WHERE server_id=? AND name=?`, id, name)
+	return err
+}
+
 func (d *DB) Connector(id int64) (Connector, error) {
 	var c Connector
 	err := d.sql.QueryRow(`SELECT server_id, listen, token, pid FROM connector WHERE server_id=?`, id).Scan(&c.ServerID, &c.Listen, &c.Token, &c.PID)
