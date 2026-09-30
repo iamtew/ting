@@ -2,10 +2,8 @@
 /dist/**
 !/dist/.gitkeep
 
-# Local env (prod host/path, secrets)
+# Local secrets
 .env
-.env.*
-!.env.example
 config.toml
 ting.db
 ting.db-wal

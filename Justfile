@@ -1,7 +1,6 @@
-# ting — build → package (zip) → ship to Linux prod
+# ting — build → package (zip)
 # Windows 10 (PowerShell) + Linux (bash). Packages the working tree (no commit/push).
 
-set dotenv-load := true
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 set shell := ["bash", "-cu"]
 
@@ -9,11 +8,6 @@ name      := "ting"
 dist_dir  := "dist"
 stage_dir := dist_dir / "stage"
 artifact  := dist_dir / (name + ".zip")
-
-# Prod target — set via env, `.env` (gitignored), or recipe args.
-prod_host := env_var_or_default("TING_PROD_HOST", "")
-prod_path := env_var_or_default("TING_PROD_PATH", "")
-prod_user := env_var_or_default("TING_PROD_USER", "")
 
 default:
     @just --list
@@ -75,35 +69,6 @@ package: build
     if (Test-Path "{{ artifact }}") { Remove-Item -Force "{{ artifact }}" }
     Compress-Archive -Path (Join-Path "{{ stage_dir }}" '*') -DestinationPath "{{ artifact }}"
     Write-Host "wrote {{ artifact }}"
-
-# ── ship: scp zip to Linux prod ────────────────────────────────────────
-
-[unix]
-ship host=prod_host path=prod_path user=prod_user: package
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -z "{{ host }}" || -z "{{ path }}" ]]; then
-      echo "error: set TING_PROD_HOST and TING_PROD_PATH (or pass host= path=)" >&2
-      exit 1
-    fi
-    target="{{ host }}"
-    if [[ -n "{{ user }}" ]]; then target="{{ user }}@{{ host }}"; fi
-    dest="${target}:{{ path }}/"
-    echo "scp {{ artifact }} ${dest}"
-    scp "{{ artifact }}" "${dest}"
-
-[windows]
-ship host=prod_host path=prod_path user=prod_user: package
-    #!powershell.exe
-    $ErrorActionPreference = "Stop"
-    if (-not "{{ host }}" -or -not "{{ path }}") {
-      Write-Error "set TING_PROD_HOST and TING_PROD_PATH (or pass host= path=)"
-      exit 1
-    }
-    $target = if ("{{ user }}") { "{{ user }}@{{ host }}" } else { "{{ host }}" }
-    $dest = "${target}:{{ path }}/"
-    Write-Host "scp {{ artifact }} $dest"
-    scp "{{ artifact }}" $dest
 
 # ── run: gateway + master from repo root (dev) ─────────────────────────
 

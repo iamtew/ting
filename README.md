@@ -2,7 +2,7 @@
 
 IRC platform (Go). Spec: [`docs/00_SPEC.md`](docs/00_SPEC.md).
 
-Develop on Windows 10, package a zip locally, ship to Linux prod. No commit/push required to package.
+Develop on Windows 10, package a zip locally. No commit/push required to package.
 
 ## Install `just`
 
@@ -11,8 +11,8 @@ Develop on Windows 10, package a zip locally, ship to Linux prod. No commit/push
 
 Also needed:
 
-- **Linux:** `zip`, `tar`, OpenSSH `scp`
-- **Windows:** PowerShell 5+ (built-in), OpenSSH Client optional feature (`scp`)
+- **Linux:** `zip`, `tar`
+- **Windows:** PowerShell 5+ (built-in)
 
 ## Recipes
 
@@ -21,27 +21,10 @@ just run       # build connector + start master (needs config.toml)
 just stop      # kill leftover connector/master from `just run`
 just build     # stage working tree + linux amd64 binaries → dist/stage
 just package   # zip → dist/ting.zip (runs build)
-just ship      # scp zip to prod (runs package)
 just clean     # wipe dist/
 ```
 
-### Ship to prod
-
-Set host/path (and optional user). Do not commit secrets.
-
-```text
-TING_PROD_HOST=prod.example.com
-TING_PROD_PATH=/opt/ting
-TING_PROD_USER=deploy          # optional
-```
-
-Env vars, a gitignored `.env` in the repo root, or:
-
-```text
-just ship host=prod.example.com path=/opt/ting user=deploy
-```
-
-On the Linux box: unzip `ting.zip` into the deploy path, copy `config.example.toml` to `config.toml`, edit identity and `control.token`, then run `./ting-master`. Master starts `ting-connector` children for each enabled server in `ting.db`. Add servers in the admin UI.
+On a Linux box: unzip `ting.zip` into the deploy path, copy `config.example.toml` to `config.toml`, edit identity and `control.token`, then run `./ting-master`. Master starts `ting-connector` children for each enabled server in `ting.db`. Add servers in the admin UI.
 
 ## Run locally
 
