@@ -42,6 +42,7 @@ type Master struct {
 	mu      sync.Mutex
 	procs   map[int64]*proc
 	engines map[int64]*resolve.Engine
+	pages   *linkPager
 	tail    []logEvent
 	subs    map[chan logEvent]struct{}
 }
@@ -58,6 +59,7 @@ func New(cfg config.Config, db *store.DB, connector string, stop func(), logger 
 		log:       logger,
 		procs:     make(map[int64]*proc),
 		engines:   make(map[int64]*resolve.Engine),
+		pages:     newLinkPager(),
 		subs:      make(map[chan logEvent]struct{}),
 	}
 }
@@ -141,6 +143,18 @@ func (m *Master) onEvent(id int64, cl *control.Client, ev control.Event) {
 			}
 			if err := cl.Privmsg(reply, karmaLookup(m.db, id, args)); err != nil {
 				m.log.Printf("karma: %v", err)
+			}
+			return
+		}
+		if name == "link" || name == "l" || name == "more" || name == "m" {
+			reply := dest
+			if !isChan(dest) {
+				reply = msg.Nick
+			}
+			for _, line := range linkReplies(m.db, m.pages, id, dest, msg.Nick, name, args) {
+				if err := cl.Privmsg(reply, line); err != nil {
+					m.log.Printf("link: %v", err)
+				}
 			}
 			return
 		}

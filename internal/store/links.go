@@ -2,6 +2,7 @@ package store
 
 import (
 	"bufio"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,9 @@ import (
 	"strings"
 	"time"
 )
+
+// LinkPageSize is how many links one IRC page shows before .more.
+const LinkPageSize = 3
 
 // Link is one t3b-style resolved URL (JSONL field URL is uppercase).
 type Link struct {
@@ -168,6 +172,10 @@ FROM links WHERE `+w+` ORDER BY datetime DESC, id DESC LIMIT ? OFFSET ?`, args..
 	if err != nil {
 		return nil, err
 	}
+	return scanLinks(rows)
+}
+
+func scanLinks(rows *sql.Rows) ([]Link, error) {
 	defer rows.Close()
 	var out []Link
 	for rows.Next() {
@@ -178,4 +186,91 @@ FROM links WHERE `+w+` ORDER BY datetime DESC, id DESC LIMIT ? OFFSET ?`, args..
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// LinkStats is totals for bare .link.
+type LinkStats struct {
+	Total   int
+	Domains int
+}
+
+func (d *DB) LinkStats(serverID int64) (LinkStats, error) {
+	var st LinkStats
+	err := d.sql.QueryRow(`SELECT COUNT(*), COUNT(DISTINCT domain) FROM links WHERE server_id=?`, serverID).Scan(&st.Total, &st.Domains)
+	return st, err
+}
+
+func (d *DB) GetLink(serverID, id int64) (Link, bool, error) {
+	var e Link
+	err := d.sql.QueryRow(`
+SELECT id, server_id, datetime, channel, user, domain, url, title
+FROM links WHERE server_id=? AND id=?`, serverID, id).Scan(
+		&e.ID, &e.ServerID, &e.Datetime, &e.Channel, &e.User, &e.Domain, &e.URL, &e.Title,
+	)
+	if err == sql.ErrNoRows {
+		return e, false, nil
+	}
+	return e, err == nil, err
+}
+
+func (d *DB) LastLinks(serverID int64, n int) ([]Link, error) {
+	if n <= 0 {
+		return nil, nil
+	}
+	if n > 200 {
+		n = 200
+	}
+	rows, err := d.sql.Query(`
+SELECT id, server_id, datetime, channel, user, domain, url, title
+FROM links WHERE server_id=? ORDER BY id DESC LIMIT ?`, serverID, n)
+	if err != nil {
+		return nil, err
+	}
+	return scanLinks(rows)
+}
+
+func (d *DB) SearchLinks(serverID int64, q string) ([]Link, error) {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return nil, nil
+	}
+	like := likeArg(q)
+	rows, err := d.sql.Query(`
+SELECT id, server_id, datetime, channel, user, domain, url, title
+FROM links WHERE server_id=? AND (url LIKE ? ESCAPE '\' OR title LIKE ? ESCAPE '\' OR domain LIKE ? ESCAPE '\')
+ORDER BY id ASC`, serverID, like, like, like)
+	if err != nil {
+		return nil, err
+	}
+	return scanLinks(rows)
+}
+
+// FormatEntry is one IRC-friendly line for a logged link.
+func FormatEntry(e Link) string {
+	return fmt.Sprintf("#%d [%s] <%s> %s — %s", e.ID, e.Channel, e.User, e.URL, e.Title)
+}
+
+// FormatPage returns up to LinkPageSize formatted lines from entries[offset:], plus a footer.
+func FormatPage(entries []Link, offset int) (lines []string, next int, hasMore bool) {
+	total := len(entries)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= total {
+		return nil, offset, false
+	}
+	end := offset + LinkPageSize
+	if end > total {
+		end = total
+	}
+	for i := offset; i < end; i++ {
+		lines = append(lines, FormatEntry(entries[i]))
+	}
+	footer := fmt.Sprintf("Showing %d-%d of %d.", offset+1, end, total)
+	if end < total {
+		footer += " Send .more or .m for next."
+		hasMore = true
+	}
+	lines = append(lines, footer)
+	return lines, end, hasMore
 }

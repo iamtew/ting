@@ -63,4 +63,24 @@ not json
 	if n != 3 {
 		t.Fatalf("count %d", n)
 	}
+	e, ok, err := d.GetLink(b.ID, list[0].ID)
+	if err != nil || !ok || e.URL != "https://example.com/b" {
+		t.Fatalf("get %+v %v %v", e, ok, err)
+	}
+	st3, err := d.LinkStats(b.ID)
+	if err != nil || st3.Total != 3 || st3.Domains != 1 {
+		t.Fatalf("stats %+v %v", st3, err)
+	}
+	last, err := d.LastLinks(b.ID, 2)
+	if err != nil || len(last) != 2 || last[0].URL != "https://example.com/c" {
+		t.Fatalf("last %+v %v", last, err)
+	}
+	found, err := d.SearchLinks(b.ID, "hello")
+	if err != nil || len(found) != 1 || found[0].Title != "Title: hello" {
+		t.Fatalf("searchlinks %+v %v", found, err)
+	}
+	lines, next, more := FormatPage(last, 0)
+	if len(lines) != 3 || next != 2 || more || !strings.Contains(lines[0], last[0].URL) {
+		t.Fatalf("page lines=%v next=%d more=%v", lines, next, more)
+	}
 }

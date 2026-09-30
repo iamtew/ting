@@ -58,7 +58,7 @@ Connectivity: TLS, SASL PLAIN, nick/user/realname, autojoin (many channels), rec
 
 Auth: owner / admin / user via `nick!user@host` with wildcards.
 
-URL resolve (master, not the connector): first http(s) URL in a channel PRIVMSG. Modules, first match wins: Twitter/X, Bluesky, YouTube (Data API v3 when a key is set), Reddit, generic page title. Per-server enable/disable + YouTube key in the admin server tab (same knobs as t3b `[resolve]`). 6 titles per channel per minute. Resolved links persist in SQLite. Admin **links** tab: search and browse. **import** tab: drag-drop t3b `links-*.log` JSONL or `karma-*.db` onto a server (link duplicates skipped; karma scores upserted).
+URL resolve (master, not the connector): first http(s) URL in a channel PRIVMSG. Modules, first match wins: Twitter/X, Bluesky, YouTube (Data API v3 when a key is set), Reddit, generic page title. Per-server enable/disable + YouTube key in the admin server tab (same knobs as t3b `[resolve]`). 6 titles per channel per minute. Resolved links persist in SQLite. Public `.link` / `.l` (search, id, last) and `.more` / `.m` in channel or DM, no ACL. Admin **links** tab: search and browse. **import** tab: drag-drop t3b `links-*.log` JSONL or `karma-*.db` onto a server (link duplicates skipped; karma scores upserted).
 
 Karma (master): channel `phrase++` / `phrase--` (silent ±1), `+d`/`-d` (dice 1–6), `+N..M`/`-N..M` (random, max 23). Public `.karma` / `.karma <phrase>` in channel or DM. Scores per server in `ting.db`.
 
