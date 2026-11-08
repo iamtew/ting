@@ -134,17 +134,17 @@ func (m *Master) onEvent(id int64, cl *control.Client, ev control.Event) {
 	msg := gateway.Parse(ev.Line)
 	switch msg.Command {
 	case "TOPIC", "332", "331":
-		ch, seen, ok := topicLine(msg.Command, msg.Params)
+		ch, seen, ok := gateway.TopicOf(msg)
 		if !ok {
 			return
 		}
-		restore, err := applyTopicSeen(m.db, id, ch, seen)
+		restore, err := applyTopicSeen(m.db, id, msg.Command, ch, seen)
 		if err != nil {
 			m.log.Printf("topic: %v", err)
 			return
 		}
 		if restore != "" {
-			if err := cl.Raw("TOPIC " + ch + " :" + restore); err != nil {
+			if err := sendTopic(cl, ch, restore); err != nil {
 				m.log.Printf("topic: %v", err)
 			}
 		}
@@ -291,7 +291,7 @@ func (m *Master) apply(cl *control.Client, a Act) error {
 	case "mode":
 		return cl.Raw("MODE " + a.Target + " " + a.Text)
 	case "topic":
-		return cl.Raw("TOPIC " + a.Target + " :" + a.Text)
+		return sendTopic(cl, a.Target, a.Text)
 	case "topicquery":
 		return cl.Raw("TOPIC " + a.Target)
 	case "nick":

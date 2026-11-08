@@ -21,21 +21,6 @@ func TestChanOp(t *testing.T) {
 	}
 }
 
-func TestTopicLine(t *testing.T) {
-	ch, topic, ok := topicLine("332", []string{"ting", "#chan", "hello there"})
-	if !ok || ch != "#chan" || topic != "hello there" {
-		t.Fatalf("332 %s %q %v", ch, topic, ok)
-	}
-	ch, topic, ok = topicLine("331", []string{"ting", "#chan", "No topic is set"})
-	if !ok || ch != "#chan" || topic != "" {
-		t.Fatalf("331 %s %q %v", ch, topic, ok)
-	}
-	ch, topic, ok = topicLine("TOPIC", []string{"#chan", "new"})
-	if !ok || ch != "#chan" || topic != "new" {
-		t.Fatalf("TOPIC %s %q %v", ch, topic, ok)
-	}
-}
-
 func TestTopicLockFlow(t *testing.T) {
 	d, err := store.Open(filepath.Join(t.TempDir(), "ting.db"))
 	if err != nil {
@@ -48,7 +33,7 @@ func TestTopicLockFlow(t *testing.T) {
 	}
 	p := newLinkPager()
 
-	if restore, err := applyTopicSeen(d, b.ID, "#ting", "hello"); err != nil || restore != "" {
+	if restore, err := applyTopicSeen(d, b.ID, "332", "#ting", "hello"); err != nil || restore != "" {
 		t.Fatalf("observe restore=%q %v", restore, err)
 	}
 
@@ -62,11 +47,11 @@ func TestTopicLockFlow(t *testing.T) {
 		t.Fatalf("enable %+v", got)
 	}
 
-	restore, err := applyTopicSeen(d, b.ID, "#ting", "drift")
+	restore, err := applyTopicSeen(d, b.ID, "TOPIC", "#ting", "drift")
 	if err != nil || restore != "hello" {
 		t.Fatalf("restore %q %v", restore, err)
 	}
-	restore, err = applyTopicSeen(d, b.ID, "#ting", "hello")
+	restore, err = applyTopicSeen(d, b.ID, "TOPIC", "#ting", "hello")
 	if err != nil || restore != "" {
 		t.Fatalf("match %q %v", restore, err)
 	}
@@ -89,7 +74,7 @@ func TestTopicLockFlow(t *testing.T) {
 	if len(got) != 1 || got[0].Text != "no longer maintaining topic lock" {
 		t.Fatalf("disable %+v", got)
 	}
-	restore, err = applyTopicSeen(d, b.ID, "#ting", "later")
+	restore, err = applyTopicSeen(d, b.ID, "TOPIC", "#ting", "later")
 	if err != nil || restore != "" {
 		t.Fatalf("unlocked %q %v", restore, err)
 	}
@@ -118,12 +103,24 @@ func TestTopicEnableQueriesWhenUnknown(t *testing.T) {
 	if len(got) != 2 || got[1].Kind != "topicquery" {
 		t.Fatalf("%+v", got)
 	}
-	restore, err := applyTopicSeen(d, b.ID, "#lab", "filled")
+	restore, err := applyTopicSeen(d, b.ID, "TOPIC", "#lab", "spam")
+	if err != nil || restore != "" {
+		t.Fatalf("user topic must not fill empty lock %q %v", restore, err)
+	}
+	lock, ok, err := d.GetTopicLock(b.ID, "#lab")
+	if err != nil || !ok || !lock.Enabled || lock.Topic != "" {
+		t.Fatalf("empty lock %+v %v %v", lock, ok, err)
+	}
+	restore, err = applyTopicSeen(d, b.ID, "332", "#lab", "filled")
 	if err != nil || restore != "" {
 		t.Fatalf("fill %q %v", restore, err)
 	}
-	lock, ok, err := d.GetTopicLock(b.ID, "#lab")
+	lock, ok, err = d.GetTopicLock(b.ID, "#lab")
 	if err != nil || !ok || !lock.Enabled || lock.Topic != "filled" {
 		t.Fatalf("filled %+v %v %v", lock, ok, err)
+	}
+	restore, err = applyTopicSeen(d, b.ID, "TOPIC", "#lab", "spam")
+	if err != nil || restore != "filled" {
+		t.Fatalf("restore after fill %q %v", restore, err)
 	}
 }

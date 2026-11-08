@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/iamtew/ting/internal/control"
+	"github.com/iamtew/ting/internal/gateway"
 	"github.com/iamtew/ting/internal/store"
 )
 
@@ -36,32 +37,13 @@ func chanOp(st control.Status, channel, nick string) bool {
 	return false
 }
 
-func topicLine(cmd string, params []string) (channel, topic string, ok bool) {
-	switch cmd {
-	case "TOPIC":
-		if len(params) < 1 {
-			return "", "", false
-		}
-		if len(params) == 1 {
-			return params[0], "", true
-		}
-		return params[0], params[len(params)-1], true
-	case "332":
-		if len(params) < 2 {
-			return "", "", false
-		}
-		return params[1], params[len(params)-1], true
-	case "331":
-		if len(params) < 2 {
-			return "", "", false
-		}
-		return params[1], "", true
-	}
-	return "", "", false
+func sendTopic(cl *control.Client, channel, text string) error {
+	return cl.Raw(gateway.Message{Command: "TOPIC", Params: []string{channel, text}}.Encode())
 }
 
 // applyTopicSeen records unlocked topics and returns a restore string when locked and drifted.
-func applyTopicSeen(d *store.DB, serverID int64, channel, seen string) (restore string, err error) {
+// Only 332/331 may fill an empty lock (reply to TOPIC query). A user TOPIC is never adopted.
+func applyTopicSeen(d *store.DB, serverID int64, cmd, channel, seen string) (restore string, err error) {
 	if d == nil {
 		return "", nil
 	}
@@ -72,7 +54,11 @@ func applyTopicSeen(d *store.DB, serverID int64, channel, seen string) (restore 
 	if !ok || !lock.Enabled {
 		return "", d.ObserveTopic(serverID, channel, seen)
 	}
+	cmd = strings.ToUpper(cmd)
 	if lock.Topic == "" {
+		if cmd != "332" && cmd != "331" {
+			return "", nil
+		}
 		if seen == "" {
 			return "", nil
 		}
