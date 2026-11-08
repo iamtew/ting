@@ -250,8 +250,8 @@ func FormatEntry(e Link) string {
 	return fmt.Sprintf("#%d [%s] <%s> %s — %s", e.ID, e.Channel, e.User, e.URL, e.Title)
 }
 
-// FormatPage returns up to LinkPageSize formatted lines from entries[offset:], plus a footer.
-func FormatPage(entries []Link, offset int) (lines []string, next int, hasMore bool) {
+// FormatPage returns up to LinkPageSize lines from entries[offset:], plus a footer.
+func FormatPage(entries []string, offset int) (lines []string, next int, hasMore bool) {
 	total := len(entries)
 	if offset < 0 {
 		offset = 0
@@ -263,9 +263,7 @@ func FormatPage(entries []Link, offset int) (lines []string, next int, hasMore b
 	if end > total {
 		end = total
 	}
-	for i := offset; i < end; i++ {
-		lines = append(lines, FormatEntry(entries[i]))
-	}
+	lines = append(lines, entries[offset:end]...)
 	footer := fmt.Sprintf("Showing %d-%d of %d.", offset+1, end, total)
 	if end < total {
 		footer += " Send .more or .m for next."

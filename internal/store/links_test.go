@@ -79,7 +79,8 @@ not json
 	if err != nil || len(found) != 1 || found[0].Title != "Title: hello" {
 		t.Fatalf("searchlinks %+v %v", found, err)
 	}
-	lines, next, more := FormatPage(last, 0)
+	page := []string{FormatEntry(last[0]), FormatEntry(last[1])}
+	lines, next, more := FormatPage(page, 0)
 	if len(lines) != 3 || next != 2 || more || !strings.Contains(lines[0], last[0].URL) {
 		t.Fatalf("page lines=%v next=%d more=%v", lines, next, more)
 	}

@@ -12,7 +12,7 @@ import (
 const linkHelp = "link search: .link / .l | .link search <q> / .l s <q> | .link <id> | .link last [n] / .l l | .more / .m"
 
 type linkSession struct {
-	entries []store.Link
+	entries []string
 	offset  int
 }
 
@@ -66,7 +66,7 @@ func linkCmd(d *store.DB, p *linkPager, key string, serverID int64, args []strin
 		if len(hits) == 0 {
 			return []string{"no matches"}
 		}
-		return startPage(p, key, hits)
+		return startPage(p, key, formatLinks(hits))
 	case "last", "l":
 		n := 3
 		if len(args) > 1 {
@@ -83,7 +83,7 @@ func linkCmd(d *store.DB, p *linkPager, key string, serverID int64, args []strin
 		if len(hits) == 0 {
 			return []string{"no links yet"}
 		}
-		return startPage(p, key, hits)
+		return startPage(p, key, formatLinks(hits))
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil || id < 1 {
@@ -99,7 +99,15 @@ func linkCmd(d *store.DB, p *linkPager, key string, serverID int64, args []strin
 	return []string{store.FormatEntry(e)}
 }
 
-func startPage(p *linkPager, key string, hits []store.Link) []string {
+func formatLinks(hits []store.Link) []string {
+	out := make([]string, len(hits))
+	for i, e := range hits {
+		out[i] = store.FormatEntry(e)
+	}
+	return out
+}
+
+func startPage(p *linkPager, key string, hits []string) []string {
 	lines, next, _ := store.FormatPage(hits, 0)
 	p.mu.Lock()
 	p.s[key] = linkSession{entries: hits, offset: next}
