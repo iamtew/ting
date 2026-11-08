@@ -148,7 +148,23 @@ CREATE TABLE IF NOT EXISTS karma (
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
-);`)
+);
+CREATE TABLE IF NOT EXISTS topic_lock (
+  server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  topic TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (server_id, channel)
+);
+CREATE TABLE IF NOT EXISTS topic_history (
+  id INTEGER PRIMARY KEY,
+  server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  nick TEXT NOT NULL,
+  datetime TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS topic_history_chan ON topic_history(server_id, channel, id);`)
 	return err
 }
 
