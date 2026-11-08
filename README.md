@@ -26,6 +26,8 @@ just clean     # wipe dist/
 
 On a Linux box: unzip `ting.zip` into the deploy path, copy `config.example.toml` to `config.toml`, edit identity and `control.token`, then run `./ting-master`. Master starts `ting-connector` children for each enabled server in `ting.db`. Add servers in the admin UI.
 
+User systemd: copy [`contrib/ting.service`](contrib/ting.service) to `~/.config/systemd/user/` (edit paths), then `systemctl --user daemon-reload` and `enable --now ting`. `KillMode=process` is required: the default (`control-group`) SIGTERMs connectors on master restart. After a good restart the journal says `adopted server`, not `connector server`. Stop of the unit also leaves connectors; cycle in the admin UI or `pkill -x ting-connector` to drop IRC.
+
 ## Run locally
 
 ```text

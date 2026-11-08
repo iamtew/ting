@@ -1,0 +1,13 @@
+[Unit]
+Description=ting
+After=network.target
+
+[Service]
+WorkingDirectory=/home/tew/ting
+ExecStart=/home/tew/ting/ting-master
+Restart=on-failure
+# default control-group SIGTERMs connector children; process = master only
+KillMode=process
+
+[Install]
+WantedBy=default.target
