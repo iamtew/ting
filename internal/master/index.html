@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/css/solid.min.css">
 <link rel="stylesheet" href="/static/css/regular.min.css">
 <link rel="stylesheet" href="/static/css/brands.min.css">
-<link rel="stylesheet" href="/static/css/admin.css?v=10">
+<link rel="stylesheet" href="/static/css/admin.css?v=11">
 </head>
 <body>
 <header>
@@ -38,7 +38,7 @@
     <form id="joinlive" class="joinf"><input name="channel" placeholder="#channel"><button type="submit"><i class="fa-solid fa-plus"></i></button></form>
   </div>
   <div class="pane">
-    <h2 id="chantitle">—</h2>
+    <h2 id="chantitle"><span id="channame">—</span><span id="chantopic"></span></h2>
     <div id="msgs"></div>
     <form id="saylive" class="composer"><input name="text" id="saybox" placeholder="message  /nick /raw /quit" autocomplete="off"><button type="submit"><i class="fa-solid fa-comment"></i> send</button></form>
   </div>
@@ -347,6 +347,11 @@ function ingest(ev) {
     pushBuf(id, srvKey(), {t, sys: true, nick: m.nick || dest || m.cmd, text});
     return;
   }
+  if (m.cmd === 'TOPIC' || m.cmd === '332' || m.cmd === '331') {
+    const ch = m.cmd === 'TOPIC' ? (m.params[0] || '') : (m.params[1] || '');
+    const topic = m.cmd === '331' ? '' : (m.params.length ? m.params[m.params.length - 1] : '');
+    noteTopic(id, ch, topic);
+  }
   if (m.cmd === 'JOIN' || m.cmd === 'PART') {
     const ch = m.params[0] || '';
     if (isChan(ch)) pushBuf(id, ch, {t, sys: true, nick: '*', text: m.nick + ' ' + m.cmd.toLowerCase() + ' ' + ch});
@@ -369,10 +374,31 @@ function nickRank(n) {
 function sortNicks(list) {
   return (list || []).slice().sort((a, b) => nickRank(a) - nickRank(b) || bareNick(a).localeCompare(bareNick(b), undefined, {sensitivity: 'base'}));
 }
+function chanTopic(s, ch) {
+  const t = (s && s.gateway && s.gateway.topics) || {};
+  if (t[ch] != null) return t[ch];
+  const key = Object.keys(t).find(k => k.toLowerCase() === String(ch || '').toLowerCase());
+  return key ? t[key] : '';
+}
+function noteTopic(id, ch, topic) {
+  const s = servers.find(x => x.id === id);
+  if (!s || !isChan(ch)) return;
+  s.gateway = s.gateway || {};
+  s.gateway.topics = s.gateway.topics || {};
+  s.gateway.topics[ch.toLowerCase()] = topic;
+}
 function renderLive() {
   const s = selected();
   const ch = currentChan();
-  document.getElementById('chantitle').textContent = (isSrv(ch) ? srvLabel(s) : ch) || 'no channel';
+  const nameEl = document.getElementById('channame');
+  const topicEl = document.getElementById('chantopic');
+  if (isSrv(ch) || !ch) {
+    nameEl.textContent = srvLabel(s) || 'no channel';
+    topicEl.textContent = '';
+  } else {
+    nameEl.textContent = ch;
+    topicEl.textContent = '| ' + chanTopic(s, ch);
+  }
   const ul = document.getElementById('chul');
   ul.replaceChildren();
   for (const name of chanList(s)) {

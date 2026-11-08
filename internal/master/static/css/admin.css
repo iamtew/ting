@@ -271,6 +271,27 @@ label.check { color: var(--dim); font-size: .85rem; }
   color: var(--dim);
   border-bottom: 1px solid var(--line);
 }
+.pane h2#chantitle {
+  text-transform: none;
+  display: flex;
+  align-items: baseline;
+  gap: .45rem;
+  min-width: 0;
+}
+#channame {
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+#chantopic {
+  color: var(--ink);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 .chlist ul, .nicks ul {
   list-style: none;
   margin: 0;
