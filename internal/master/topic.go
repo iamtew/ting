@@ -8,7 +8,7 @@ import (
 	"github.com/iamtew/ting/internal/store"
 )
 
-const topicUsage = "usage: .topic on|off | .topic <text> | .topic history [q]  (.t)"
+const topicUsage = "usage: .topic on|off | .topic status | .topic <text> | .topic history [q]  (.t)"
 
 const statusMarks = "~&@%+"
 
@@ -89,6 +89,8 @@ func topicActs(d *store.DB, p *linkPager, serverID int64, dest, nick string, arg
 	case "history", "h":
 		q := strings.Join(args[1:], " ")
 		return topicHistory(d, p, serverID, dest, nick, q)
+	case "status", "state":
+		return topicStatus(d, serverID, dest)
 	}
 	text := strings.Join(args, " ")
 	if err := d.SetTopicLockTopic(serverID, dest, text); err != nil {
@@ -128,6 +130,20 @@ func topicEnable(d *store.DB, serverID int64, dest, nick string) []Act {
 		{Kind: "privmsg", Target: dest, Text: "maintaining topic lock"},
 		{Kind: "topicquery", Target: dest},
 	}
+}
+
+func topicStatus(d *store.DB, serverID int64, dest string) []Act {
+	lock, _, err := d.GetTopicLock(serverID, dest)
+	if err != nil {
+		return []Act{{Kind: "privmsg", Target: dest, Text: "topic failed: " + err.Error()}}
+	}
+	if !lock.Enabled {
+		return []Act{{Kind: "privmsg", Target: dest, Text: "topic lock is off"}}
+	}
+	if lock.Topic == "" {
+		return []Act{{Kind: "privmsg", Target: dest, Text: "topic lock is on"}}
+	}
+	return []Act{{Kind: "privmsg", Target: dest, Text: "topic lock is on, enforcing topic: " + lock.Topic}}
 }
 
 func topicDisable(d *store.DB, serverID int64, dest string) []Act {

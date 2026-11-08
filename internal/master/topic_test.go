@@ -42,9 +42,18 @@ func TestTopicLockFlow(t *testing.T) {
 		t.Fatalf("usage %+v", got)
 	}
 
+	got = topicActs(d, p, b.ID, "#ting", "ann", []string{"status"})
+	if len(got) != 1 || got[0].Text != "topic lock is off" {
+		t.Fatalf("status off %+v", got)
+	}
+
 	got = topicActs(d, p, b.ID, "#ting", "ann", []string{"on"})
 	if len(got) != 2 || got[0].Text != "maintaining topic lock" || got[1].Kind != "topic" || got[1].Text != "hello" {
 		t.Fatalf("enable %+v", got)
+	}
+	got = topicActs(d, p, b.ID, "#ting", "ann", []string{"status"})
+	if len(got) != 1 || got[0].Text != "topic lock is on, enforcing topic: hello" {
+		t.Fatalf("status on %+v", got)
 	}
 
 	restore, err := applyTopicSeen(d, b.ID, "TOPIC", "#ting", "drift")
@@ -70,9 +79,18 @@ func TestTopicLockFlow(t *testing.T) {
 		t.Fatalf("search %+v", got)
 	}
 
+	got = topicActs(d, p, b.ID, "#ting", "ann", []string{"state"})
+	if len(got) != 1 || got[0].Text != "topic lock is on, enforcing topic: new topic" {
+		t.Fatalf("state on %+v", got)
+	}
+
 	got = topicActs(d, p, b.ID, "#ting", "ann", []string{"off"})
 	if len(got) != 1 || got[0].Text != "no longer maintaining topic lock" {
 		t.Fatalf("disable %+v", got)
+	}
+	got = topicActs(d, p, b.ID, "#ting", "ann", []string{"status"})
+	if len(got) != 1 || got[0].Text != "topic lock is off" {
+		t.Fatalf("status after off %+v", got)
 	}
 	restore, err = applyTopicSeen(d, b.ID, "TOPIC", "#ting", "later")
 	if err != nil || restore != "" {
@@ -102,6 +120,10 @@ func TestTopicEnableQueriesWhenUnknown(t *testing.T) {
 	got := topicActs(d, newLinkPager(), b.ID, "#lab", "ann", []string{"enable"})
 	if len(got) != 2 || got[1].Kind != "topicquery" {
 		t.Fatalf("%+v", got)
+	}
+	got = topicActs(d, newLinkPager(), b.ID, "#lab", "ann", []string{"status"})
+	if len(got) != 1 || got[0].Text != "topic lock is on" {
+		t.Fatalf("status empty %+v", got)
 	}
 	restore, err := applyTopicSeen(d, b.ID, "TOPIC", "#lab", "spam")
 	if err != nil || restore != "" {
