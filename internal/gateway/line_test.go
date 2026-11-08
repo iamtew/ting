@@ -32,6 +32,22 @@ func TestParse(t *testing.T) {
 	if Parse(m.Encode()).Last() != "#Chan" {
 		t.Fatalf("encode roundtrip %q", m.Encode())
 	}
+	m = Parse("@time=1 :bob!u@h topic #chan :new topic")
+	if m.Command != "TOPIC" || m.Nick != "bob" || m.Params[0] != "#chan" || m.Last() != "new topic" {
+		t.Fatalf("tagged topic: %+v", m)
+	}
+	ch, topic, ok := TopicOf(m)
+	if !ok || ch != "#chan" || topic != "new topic" {
+		t.Fatalf("TopicOf %s %q %v", ch, topic, ok)
+	}
+	ch, topic, ok = TopicOf(Parse(":irc 332 ting #chan :hello there"))
+	if !ok || ch != "#chan" || topic != "hello there" {
+		t.Fatalf("332 %s %q %v", ch, topic, ok)
+	}
+	ch, topic, ok = TopicOf(Parse(":irc 331 ting #chan :No topic is set"))
+	if !ok || ch != "#chan" || topic != "" {
+		t.Fatalf("331 %s %q %v", ch, topic, ok)
+	}
 }
 
 func TestSASLPlain(t *testing.T) {
@@ -78,5 +94,22 @@ func TestModePrefix(t *testing.T) {
 	nicks = g.ChannelNicks("#ting")
 	if nicks[0] != "+alice" {
 		t.Fatalf("voice %v", nicks)
+	}
+}
+
+func TestTopicMap(t *testing.T) {
+	g := New(testCfg(), nil)
+	_ = g.handle(Parse(":irc 332 ting #Ting :hello there"))
+	if g.Topics()["#ting"] != "hello there" {
+		t.Fatalf("332 %v", g.Topics())
+	}
+	_ = g.handle(Parse(":bob!u@h TOPIC #ting :new"))
+	if g.Topics()["#ting"] != "new" {
+		t.Fatalf("topic %v", g.Topics())
+	}
+	_ = g.handle(Parse(":ting!~t@h JOIN :#ting"))
+	_ = g.handle(Parse(":ting!~t@h PART #ting"))
+	if _, ok := g.Topics()["#ting"]; ok {
+		t.Fatalf("part should drop topic %v", g.Topics())
 	}
 }

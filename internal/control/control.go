@@ -21,6 +21,7 @@ type Status struct {
 	Nick      string              `json:"nick"`
 	Server    string              `json:"server"`
 	Channels  map[string][]string `json:"channels"`
+	Topics    map[string]string   `json:"topics"`
 }
 
 type Event struct {
@@ -100,6 +101,7 @@ func (s *Server) status(w http.ResponseWriter, _ *http.Request) {
 		Nick:      s.gw.Nick(),
 		Server:    s.gw.Addr(),
 		Channels:  map[string][]string{},
+		Topics:    s.gw.Topics(),
 	}
 	for _, ch := range s.gw.Channels() {
 		st.Channels[ch] = s.gw.ChannelNicks(ch)

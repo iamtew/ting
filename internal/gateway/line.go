@@ -22,6 +22,12 @@ func Parse(line string) Message {
 		return m
 	}
 	rest := line
+	if rest[0] == '@' {
+		_, rest = splitOnce(rest[1:], ' ')
+		if rest == "" {
+			return m
+		}
+	}
 	if rest[0] == ':' {
 		var prefix string
 		prefix, rest = splitOnce(rest[1:], ' ')
@@ -32,7 +38,7 @@ func Parse(line string) Message {
 		return m
 	}
 	cmd, rest := splitOnce(rest, ' ')
-	m.Command = cmd
+	m.Command = strings.ToUpper(cmd)
 	for rest != "" {
 		if rest[0] == ':' {
 			m.Params = append(m.Params, rest[1:])
@@ -70,6 +76,31 @@ func (m Message) Last() string {
 		return ""
 	}
 	return m.Params[len(m.Params)-1]
+}
+
+// TopicOf is the channel and topic text from TOPIC, 332, or 331.
+func TopicOf(m Message) (channel, topic string, ok bool) {
+	switch m.Command {
+	case "TOPIC":
+		if len(m.Params) < 1 {
+			return "", "", false
+		}
+		if len(m.Params) == 1 {
+			return m.Params[0], "", true
+		}
+		return m.Params[0], m.Params[len(m.Params)-1], true
+	case "332":
+		if len(m.Params) < 2 {
+			return "", "", false
+		}
+		return m.Params[1], m.Params[len(m.Params)-1], true
+	case "331":
+		if len(m.Params) < 2 {
+			return "", "", false
+		}
+		return m.Params[1], "", true
+	}
+	return "", "", false
 }
 
 func splitOnce(s string, sep byte) (string, string) {

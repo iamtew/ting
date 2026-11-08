@@ -52,6 +52,7 @@ type Gateway struct {
 	nick      string
 	connected bool
 	chans     map[string]map[string]string // folded channel -> nick -> status marks (~&@%+)
+	topics    map[string]string            // folded channel -> current topic
 }
 
 func New(cfg Spec, logger *log.Logger) *Gateway {
@@ -65,6 +66,7 @@ func New(cfg Spec, logger *log.Logger) *Gateway {
 		out:    make(chan string, sendQ),
 		nick:   cfg.Identity.Nick,
 		chans:  make(map[string]map[string]string),
+		topics: make(map[string]string),
 	}
 }
 
@@ -343,6 +345,8 @@ func (g *Gateway) handle(msg Message) error {
 		g.onNames(msg)
 	case "MODE":
 		g.onMode(msg)
+	case "TOPIC", "332", "331":
+		g.onTopic(msg)
 	}
 	return nil
 }
@@ -402,6 +406,7 @@ func (g *Gateway) onLeave(msg Message) {
 	defer g.mu.Unlock()
 	if nick == g.nick {
 		delete(g.chans, ch)
+		delete(g.topics, ch)
 		return
 	}
 	if set := g.chans[ch]; set != nil {
@@ -501,10 +506,35 @@ func (g *Gateway) onMode(msg Message) {
 	}
 }
 
+func (g *Gateway) onTopic(msg Message) {
+	ch, topic, ok := TopicOf(msg)
+	if !ok {
+		return
+	}
+	ch = fold(ch)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.topics == nil {
+		g.topics = make(map[string]string)
+	}
+	g.topics[ch] = topic
+}
+
+func (g *Gateway) Topics() map[string]string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	out := make(map[string]string, len(g.topics))
+	for k, v := range g.topics {
+		out[k] = v
+	}
+	return out
+}
+
 func (g *Gateway) resetMaps() {
 	g.mu.Lock()
 	g.nick = g.cfg.Identity.Nick
 	g.chans = make(map[string]map[string]string)
+	g.topics = make(map[string]string)
 	g.mu.Unlock()
 }
 
