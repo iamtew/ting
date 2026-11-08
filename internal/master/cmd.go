@@ -7,7 +7,7 @@ import (
 )
 
 type Act struct {
-	Kind   string // privmsg, join, part, mode, nick, shutdown
+	Kind   string // privmsg, join, part, mode, nick, shutdown, topic, topicquery
 	Target string
 	Text   string
 }

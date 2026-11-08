@@ -62,6 +62,8 @@ URL resolve (master, not the connector): first http(s) URL in a channel PRIVMSG.
 
 Karma (master): channel `phrase++` / `phrase--` (silent ±1), `+d`/`-d` (dice 1–6), `+N..M`/`-N..M` (random, max 23). Public `.karma` / `.karma <phrase>` in channel or DM. Scores per server in `ting.db`.
 
+Topic lock (master): channel ops (`~`/`&`/`@`, live names, not ACL) `.topic` / `.t`: `on`/`enable`/`lock`, `off`/`disable`/`unlock`, `<text>` to set, `history`/`h` [q] paged with `.more` / `.m`. Snapshots current topic on enable. Restores stored topic on TOPIC/332/331 drift (netsplit). Archive in `ting.db`.
+
 AI chat (master): OpenRouter. API key in `config.toml` `[ai]` (`api_key` empty = off; `model` is only the first catalog until Admin saves one). Admin **ai** tab: on/off, model list, system prompt, sampling, optional channel memory (in-memory, dropped on restart), test chat. IRC: reply when the current nick is mentioned in a channel, or on any non-command query. Replies are trimmed to one IRC line. Does not replace URL resolve or karma.
 
 Admin: `.join` `.leave` `.op` `.deop`

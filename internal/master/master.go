@@ -132,7 +132,25 @@ func (m *Master) onEvent(id int64, cl *control.Client, ev control.Event) {
 		return
 	}
 	msg := gateway.Parse(ev.Line)
-	if msg.Command != "PRIVMSG" {
+	switch msg.Command {
+	case "TOPIC", "332", "331":
+		ch, seen, ok := topicLine(msg.Command, msg.Params)
+		if !ok {
+			return
+		}
+		restore, err := applyTopicSeen(m.db, id, ch, seen)
+		if err != nil {
+			m.log.Printf("topic: %v", err)
+			return
+		}
+		if restore != "" {
+			if err := cl.Raw("TOPIC " + ch + " :" + restore); err != nil {
+				m.log.Printf("topic: %v", err)
+			}
+		}
+		return
+	case "PRIVMSG":
+	default:
 		return
 	}
 	dest := ""
@@ -163,6 +181,17 @@ func (m *Master) onEvent(id int64, cl *control.Client, ev control.Event) {
 			for _, line := range linkReplies(m.db, m.pages, id, dest, msg.Nick, name, args) {
 				if err := cl.Privmsg(reply, line); err != nil {
 					m.log.Printf("link: %v", err)
+				}
+			}
+			return
+		}
+		if name == "topic" || name == "t" {
+			if !isChan(dest) || !chanOp(st, dest, msg.Nick) {
+				return
+			}
+			for _, a := range topicActs(m.db, m.pages, id, dest, msg.Nick, args) {
+				if err := m.apply(cl, a); err != nil {
+					m.log.Printf("%s: %v", a.Kind, err)
 				}
 			}
 			return
@@ -261,6 +290,10 @@ func (m *Master) apply(cl *control.Client, a Act) error {
 		return cl.Part(a.Target, "")
 	case "mode":
 		return cl.Raw("MODE " + a.Target + " " + a.Text)
+	case "topic":
+		return cl.Raw("TOPIC " + a.Target + " :" + a.Text)
+	case "topicquery":
+		return cl.Raw("TOPIC " + a.Target)
 	case "nick":
 		return cl.Nick(a.Text)
 	case "shutdown":
