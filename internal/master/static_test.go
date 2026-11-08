@@ -1,6 +1,7 @@
 package master
 
 import (
+	"bytes"
 	"io"
 	"log"
 	"net/http"
@@ -34,5 +35,11 @@ func TestStaticPublic(t *testing.T) {
 	}
 	if loc := r2.Request.URL.Path; loc != "/login" {
 		t.Fatalf("want /login got %s", loc)
+	}
+}
+
+func TestIndexSayliveIsAsync(t *testing.T) {
+	if bytes.Contains(indexPage, []byte("bind('saylive', fd =>")) {
+		t.Fatal("saylive must be async; await in a plain arrow kills the admin script")
 	}
 }

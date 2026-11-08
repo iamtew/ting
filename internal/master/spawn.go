@@ -62,11 +62,12 @@ func (m *Master) client(id int64) (*control.Client, error) {
 
 func (m *Master) runtimeList() []runtime {
 	if m.db == nil {
-		return nil
+		return []runtime{}
 	}
 	list, err := m.db.List()
 	if err != nil {
-		return nil
+		m.log.Printf("list servers: %v", err)
+		return []runtime{}
 	}
 	out := make([]runtime, 0, len(list))
 	for _, b := range list {

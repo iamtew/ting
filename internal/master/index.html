@@ -530,7 +530,7 @@ bind('part', async fd => {
   const r = await api('/api/part', {server_id: sid, channel: ch});
   if (r && r.ok) bumpFormChan(ch, false);
 });
-bind('saylive', fd => {
+bind('saylive', async fd => {
   const text = (fd.get('text') || '').trim();
   document.getElementById('saybox').value = '';
   if (!text) return;

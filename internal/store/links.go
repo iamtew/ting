@@ -180,9 +180,11 @@ func scanLinks(rows *sql.Rows) ([]Link, error) {
 	var out []Link
 	for rows.Next() {
 		var e Link
-		if err := rows.Scan(&e.ID, &e.ServerID, &e.Datetime, &e.Channel, &e.User, &e.Domain, &e.URL, &e.Title); err != nil {
+		var title []byte
+		if err := rows.Scan(&e.ID, &e.ServerID, &e.Datetime, &e.Channel, &e.User, &e.Domain, &e.URL, &title); err != nil {
 			return nil, err
 		}
+		e.Title = strings.ToValidUTF8(string(title), "\uFFFD")
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -202,15 +204,20 @@ func (d *DB) LinkStats(serverID int64) (LinkStats, error) {
 
 func (d *DB) GetLink(serverID, id int64) (Link, bool, error) {
 	var e Link
+	var title []byte
 	err := d.sql.QueryRow(`
 SELECT id, server_id, datetime, channel, user, domain, url, title
 FROM links WHERE server_id=? AND id=?`, serverID, id).Scan(
-		&e.ID, &e.ServerID, &e.Datetime, &e.Channel, &e.User, &e.Domain, &e.URL, &e.Title,
+		&e.ID, &e.ServerID, &e.Datetime, &e.Channel, &e.User, &e.Domain, &e.URL, &title,
 	)
 	if err == sql.ErrNoRows {
 		return e, false, nil
 	}
-	return e, err == nil, err
+	if err != nil {
+		return e, false, err
+	}
+	e.Title = strings.ToValidUTF8(string(title), "\uFFFD")
+	return e, true, nil
 }
 
 func (d *DB) LastLinks(serverID int64, n int) ([]Link, error) {

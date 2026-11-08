@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestParseAndImportT3BLinks(t *testing.T) {
@@ -83,5 +84,38 @@ not json
 	lines, next, more := FormatPage(page, 0)
 	if len(lines) != 3 || next != 2 || more || !strings.Contains(lines[0], last[0].URL) {
 		t.Fatalf("page lines=%v next=%d more=%v", lines, next, more)
+	}
+}
+
+func TestListLinksInvalidUTF8(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "ting.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	b, err := d.Put(Bundle{Host: "irc.example.net", TLS: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = d.sql.Exec(`
+INSERT INTO links (server_id, datetime, channel, user, domain, url, title)
+VALUES (?,?,?,?,?,?,?)`,
+		b.ID, "2024-01-02T03:04:05Z", "#ting", "bob", "example.com", "https://example.com/x", "bad \xff title")
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := d.ListLinks(b.ID, "", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("%+v", list)
+	}
+	if !utf8.ValidString(list[0].Title) {
+		t.Fatalf("title %q", list[0].Title)
+	}
+	got, ok, err := d.GetLink(b.ID, list[0].ID)
+	if err != nil || !ok || !utf8.ValidString(got.Title) {
+		t.Fatalf("get %+v %v %v", got, ok, err)
 	}
 }
